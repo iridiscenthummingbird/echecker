@@ -5,7 +5,9 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.glance.appwidget.updateAll
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -18,10 +20,14 @@ import ua.echecker.domain.StatusFormatter
 import ua.echecker.domain.StatusText
 import java.time.ZonedDateTime
 
+private const val TAG = "WidgetRefresh"
+
 object WidgetStateLoader {
     suspend fun load(context: Context): StatusText {
         val c = context.container
         val now = ZonedDateTime.now(KyivTime.ZONE)
+        // Fallback alarm (next midnight) so the self-refresh chain survives a failed read below; replaced by the call after calculation.
+        WidgetRefreshScheduler.scheduleNext(context, PowerStatus.NoData, now)
         val today = now.toLocalDate()
         val lastSync = c.settings.lastSyncAt.first()
         val status = PowerStatusCalculator.calculate(
@@ -65,6 +71,10 @@ class WidgetRefreshReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.Default).launch {
             try {
                 PowerWidget().updateAll(context)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Widget refresh failed", e)
             } finally {
                 pending.finish()
             }
