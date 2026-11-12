@@ -75,6 +75,14 @@ object SyncScheduler {
         WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, request)
     }
 
+    /** Sync when the app comes to the foreground, unless one is already pending/running or ran within [minAge]. */
+    suspend fun syncOnOpen(context: Context, minAge: Duration = Duration.ofMinutes(2)) {
+        val last = context.container.settings.lastSyncAt.first()
+        if (last != null && Duration.between(last, Instant.now()) < minAge) return
+        val request = OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(network).build()
+        WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.KEEP, request)
+    }
+
     fun observeSyncNowRunning(context: Context): Flow<Boolean> =
         WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(NOW).map { infos ->
             infos.any { it.state == WorkInfo.State.RUNNING }

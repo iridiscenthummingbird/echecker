@@ -6,7 +6,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+import ua.echecker.sync.SyncScheduler
 import ua.echecker.ui.MainScreen
 import ua.echecker.ui.MainViewModel
 import ua.echecker.ui.theme.EcheckerTheme
@@ -22,5 +25,10 @@ class MainActivity : ComponentActivity() {
                 MainScreen(state, vm::selectQueue, vm::refresh)
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch { SyncScheduler.syncOnOpen(applicationContext) }
     }
 }
