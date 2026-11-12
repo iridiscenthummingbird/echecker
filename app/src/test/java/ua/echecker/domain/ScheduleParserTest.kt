@@ -210,4 +210,40 @@ class ScheduleParserTest {
         assertEquals(listOf(Interval(600, 720)), s.intervalsFor(Queue(1, 1)))
         assertEquals(listOf(Interval(780, 840), Interval(900, 960)), s.intervalsFor(Queue(1, 2)))
     }
+
+    /** zoe_alarm post 81516: "Черга X.Y:" prefix on the same line, intervals separated by dots, sometimes no space. */
+    @Test fun `parses Черга-prefixed compact lines`() {
+        val text = "За вказівкою НЕК “Укренерго” оновлено ГПВ на 5 Листопада.\n" +
+            "Години відсутності електропостачання по чергам (підчергам) (з урахуванням 30 хвилин на перемикання):\n\n" +
+            "Черга 1.1: 00:00 - 05:00. 09:00 - 14:00. 18:00 - 22:30\n" +
+            " Черга 1.2: 00:00 - 00:30. 14:30 - 17:00. 21:00 - 24:00\n" +
+            " Черга 2.2: 04:30 - 09:30. 13:30 - 18:30\n" +
+            " Черга 3.1:00:00 - 05:00. 09:00 - 14:00. 18:00 - 22:00\n" +
+            " Черга 6.2: 00:00 - 02:00. 07:30 - 10:00. 16:30 - 21:30"
+        val s = ScheduleParser.parse(text, LocalDate.of(2026, 11, 5))!!
+        assertEquals(LocalDate.of(2026, 11, 5), s.date)
+        assertEquals(5, s.queues.size)
+        assertEquals(
+            listOf(Interval(0, 300), Interval(540, 840), Interval(1080, 1350)),
+            s.intervalsFor(Queue(1, 1)),
+        )
+        assertEquals(listOf(Interval(270, 570), Interval(810, 1110)), s.intervalsFor(Queue(2, 2)))
+        assertEquals(
+            listOf(Interval(0, 300), Interval(540, 840), Interval(1080, 1320)),
+            s.intervalsFor(Queue(3, 1)),
+        )
+    }
+
+    /** zoe_alarm post 81456: the first queue line is glued to the header by spaces instead of a newline. */
+    @Test fun `parses a compact line glued to the header`() {
+        val text = "ОНОВЛЕНО ГПВ НА 4 ЛИСТОПАДА ПО ЗАПОРІЗЬКІЙ ОБЛАСТІ (оновлено 21:09) За вказівкою НЕК “Укренерго” оновлено ГПВ на 4 Листопада.\n" +
+            "Години відсутності електропостачання по чергам (підчергам) (з урахуванням 30 хвилин на перемикання):" +
+            " ".repeat(40) + "1.1: 06:00 – 11:00, 15:00 – 20:00\n" +
+            "1.2: 00:00 – 03:00, 10:30 – 15:30, 19:30 – 24:00\n" +
+            "\u00A0\nТакож з 00:00 до 24:00 для промисловості та бізнесу діятимуть ГОП у повному обсязі (5 черг)."
+        val s = ScheduleParser.parse(text, LocalDate.of(2026, 11, 4))!!
+        assertEquals(LocalDate.of(2026, 11, 4), s.date)
+        assertEquals(listOf(Interval(360, 660), Interval(900, 1200)), s.intervalsFor(Queue(1, 1)))
+        assertEquals(2, s.queues.size)
+    }
 }

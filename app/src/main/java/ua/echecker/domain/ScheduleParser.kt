@@ -18,7 +18,8 @@ object ScheduleParser {
     private const val DASH = """[–—\-\u2212\u2012]"""
     private val QUEUE = Regex("""Черга$WS+(\d)\.(\d)""")
     private val BLOCK_INTERVAL = Regex("""^$WS*[зЗ]$WS+(\d{1,2}):(\d{2})$WS+до$WS+(\d{1,2}):(\d{2})$WS*$""")
-    private val COMPACT_LINE = Regex("""^$WS*(\d)\.(\d)$WS*:$WS*(.+)$""")
+    // Not anchored to line start: zoe_alarm sometimes glues "1.1: …" to the header with spaces instead of a newline.
+    private val COMPACT_LINE = Regex("""(?:^|$WS)(\d)\.(\d)$WS*:$WS*(.+)$""")
     private val COMPACT_INTERVAL = Regex("""(\d{1,2}):(\d{2})$WS*$DASH$WS*(\d{1,2}):(\d{2})""")
 
     /** [referenceDate] = the post's publish date in Kyiv; used to infer the year when the post omits it. */
@@ -30,7 +31,15 @@ object ScheduleParser {
         for (line in text.lines()) {
             val qm = QUEUE.find(line)
             if (qm != null) {
-                current = Queue.parse("${qm.groupValues[1]}.${qm.groupValues[2]}")
+                val queue = Queue.parse("${qm.groupValues[1]}.${qm.groupValues[2]}")
+                // "Черга 1.1: 00:00 - 05:00. 09:00 - 14:00" — intervals on the same line; otherwise a block header.
+                val inline = COMPACT_INTERVAL.findAll(line.substring(qm.range.last + 1)).toList()
+                if (inline.isEmpty()) {
+                    current = queue
+                } else {
+                    current = null
+                    if (queue != null) for (im in inline) addInterval(raw, queue, im.groupValues)
+                }
                 continue
             }
             val bm = BLOCK_INTERVAL.find(line)
