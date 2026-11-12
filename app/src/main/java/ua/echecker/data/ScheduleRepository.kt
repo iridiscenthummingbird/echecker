@@ -42,7 +42,7 @@ class ScheduleRepository(
 
     private suspend fun save(posts: List<RawPost>) {
         for (post in posts) {
-            val schedule = ScheduleParser.parse(post.text, post.publishedAt.atZone(KyivTime.ZONE).toLocalDate()) ?: continue
+            val schedule = ScheduleParser.parse(post.text, KyivTime.dateOf(post.publishedAt)) ?: continue
             val date = schedule.date.toString()
             dao.upsertIfNewer(
                 ScheduleEntity(date, post.id, schedule.queues.toSortedMap().toString().hashCode()),

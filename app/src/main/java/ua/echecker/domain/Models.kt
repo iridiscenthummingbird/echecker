@@ -1,5 +1,6 @@
 package ua.echecker.domain
 
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
@@ -58,6 +59,10 @@ data class Schedule(val date: LocalDate, val queues: Map<Queue, List<Interval>>)
     fun intervalsFor(q: Queue): List<Interval> = queues[q].orEmpty()
 }
 
+/** Schedules are published in Kyiv / Zaporizhzhia local time; all date and time math uses this zone. */
 object KyivTime {
     val ZONE: ZoneId = runCatching { ZoneId.of("Europe/Kyiv") }.getOrElse { ZoneId.of("Europe/Kiev") }
+
+    /** The Kyiv calendar date of [instant], independent of the device time zone. */
+    fun dateOf(instant: Instant): LocalDate = instant.atZone(ZONE).toLocalDate()
 }

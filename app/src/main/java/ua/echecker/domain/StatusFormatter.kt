@@ -13,7 +13,9 @@ object StatusFormatter {
     private val DATE_TIME = DateTimeFormatter.ofPattern("dd.MM HH:mm")
     private val STALE_AFTER: Duration = Duration.ofHours(3)
 
-    fun format(status: PowerStatus, now: ZonedDateTime, lastSyncAt: Instant?): StatusText {
+    fun format(status: PowerStatus, nowAnyZone: ZonedDateTime, lastSyncAt: Instant?): StatusText {
+        // Schedules are in Kyiv time: show Kyiv wall-clock times and decide "today/tomorrow" by the Kyiv date.
+        val now = nowAnyZone.withZoneSameInstant(KyivTime.ZONE)
         val stale = lastSyncAt
             ?.takeIf { Duration.between(it, now.toInstant()) > STALE_AFTER }
             ?.let {
