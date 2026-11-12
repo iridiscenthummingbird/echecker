@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Чи є світло</string>
+    <string name="widget_description">Статус світла для вашої черги</string>
+</resources>
