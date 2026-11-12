@@ -18,6 +18,25 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    // Release signing reads from ~/.gradle/gradle.properties (never committed). Without those
+    // properties the release build is left unsigned; debug builds are unaffected.
+    val keystorePath = providers.gradleProperty("ECHECKER_KEYSTORE").orNull
+    signingConfigs {
+        if (keystorePath != null) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = providers.gradleProperty("ECHECKER_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("ECHECKER_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("ECHECKER_KEY_PASSWORD").get()
+            }
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
+    }
     buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
