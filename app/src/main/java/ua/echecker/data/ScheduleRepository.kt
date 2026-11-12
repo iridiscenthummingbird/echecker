@@ -22,7 +22,8 @@ class ScheduleRepository(
         save(source.fetch(null))
     }
 
-    suspend fun backfill(since: Instant, maxPages: Int = 20) {
+    /** zoe_alarm posts ~3 pages/day, so 100 pages ≈ 30 days of history. */
+    suspend fun backfill(since: Instant, maxPages: Int = 100) {
         var before: Long? = null
         repeat(maxPages) {
             val posts = source.fetch(before)

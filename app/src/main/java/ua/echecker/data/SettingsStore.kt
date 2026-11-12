@@ -16,7 +16,8 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 class SettingsStore(private val context: Context) {
     private val QUEUE = stringPreferencesKey("queue")
     private val LAST_SYNC = longPreferencesKey("last_sync_at")
-    private val BACKFILL_DONE = booleanPreferencesKey("backfill_done")
+    // Per-source key: switching channels (old one was Zaporizhzhyaoblenergo_news) must re-run the backfill.
+    private val BACKFILL_DONE = booleanPreferencesKey("backfill_done_zoe_alarm")
 
     val queue: Flow<Queue?> = context.dataStore.data.map { p -> p[QUEUE]?.let(Queue::parse) }
     val lastSyncAt: Flow<Instant?> = context.dataStore.data.map { p -> p[LAST_SYNC]?.let(Instant::ofEpochMilli) }
