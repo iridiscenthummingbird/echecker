@@ -19,7 +19,7 @@ interface PostSource {
 
 class ChannelFetcher(
     private val client: OkHttpClient,
-    private val channel: String = "Zaporizhzhyaoblenergo_news",
+    private val channel: String = "zoe_alarm",
 ) : PostSource {
 
     override suspend fun fetch(before: Long?): List<RawPost> = withContext(Dispatchers.IO) {
