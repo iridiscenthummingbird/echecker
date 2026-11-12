@@ -62,7 +62,12 @@ private val SYNC = DateTimeFormatter.ofPattern("dd.MM HH:mm")
 private val CardShape = RoundedCornerShape(24.dp)
 
 @Composable
-fun MainScreen(state: MainUiState, onSelectQueue: (Queue) -> Unit, onRefresh: () -> Unit) {
+fun MainScreen(
+    state: MainUiState,
+    onSelectQueue: (Queue) -> Unit,
+    onRefresh: () -> Unit,
+    onInstallUpdate: () -> Unit = {},
+) {
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(
             modifier = Modifier.safeDrawingPadding(),
@@ -70,6 +75,7 @@ fun MainScreen(state: MainUiState, onSelectQueue: (Queue) -> Unit, onRefresh: ()
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item { Header(state.queue, state.loaded) }
+            state.update?.let { u -> item { UpdateBanner(u, onInstallUpdate) } }
             if (!state.loaded) return@LazyColumn
             if (state.queue != null) {
                 item { StatusHero(state.status, state.statusText, state.today?.intervals, state.nowMinute) }
@@ -152,6 +158,61 @@ private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier,
     )
+}
+
+// ---- Update banner ----
+
+@Composable
+private fun UpdateBanner(update: UpdateUi, onInstall: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val busy = update.phase is UpdatePhase.Downloading
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(cs.secondaryContainer)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Доступна версія ${update.version}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = cs.onSecondaryContainer,
+            )
+            Text(
+                when (update.phase) {
+                    UpdatePhase.Failed -> "Не вдалося завантажити"
+                    is UpdatePhase.Ready -> "Завантажено, можна встановити"
+                    else -> "Зараз у вас ${ua.echecker.update.Updates.currentVersion}"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSecondaryContainer.copy(alpha = 0.75f),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Button(
+            onClick = onInstall,
+            enabled = !busy,
+            colors = ButtonDefaults.buttonColors(containerColor = cs.secondary, contentColor = cs.onSecondary),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            if (busy) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.onSecondary)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                when (update.phase) {
+                    UpdatePhase.Downloading -> "Завантаження…"
+                    is UpdatePhase.Ready -> "Встановити"
+                    UpdatePhase.Failed -> "Ще раз"
+                    UpdatePhase.Idle -> "Оновити"
+                },
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
 }
 
 // ---- Hero: current status ----

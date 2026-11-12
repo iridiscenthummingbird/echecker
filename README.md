@@ -35,7 +35,7 @@ widget also work offline.
 **[⬇ Download the latest APK](https://github.com/iridiscenthummingbird/echecker/releases/latest/download/echecker.apk)** · [all releases](https://github.com/iridiscenthummingbird/echecker/releases)
 
 Open the file on your phone and allow installs from this source when Android asks. Android 8.0 or newer is required.
-To update, install the new APK over the old one. Your queue and history are kept.
+**Updates:** from v1.1 on, the app checks GitHub for new releases twice a day and whenever you open it. When one is out, you get a notification and an **Оновити** (Update) button on the main screen. It downloads the APK and opens the system installer, and your queue and history are kept. The first time, Android asks you to allow installs from the app. On v1.0, download the APK above once more by hand.
 
 > If you installed an earlier build that was not from Releases, uninstall it first. It was signed with a different key,
 > so Android will refuse to install the new APK over it.
@@ -111,7 +111,7 @@ Requires JDK 17 and the Android SDK.
 **[⬇ Завантажити останній APK](https://github.com/iridiscenthummingbird/echecker/releases/latest/download/echecker.apk)** · [усі релізи](https://github.com/iridiscenthummingbird/echecker/releases)
 
 Відкрийте файл на телефоні та дозвольте встановлення з цього джерела, коли Android запитає. Потрібен Android 8.0 або новіший.
-Щоб оновитися, встановіть новий APK поверх старого. Черга та історія збережуться.
+**Оновлення:** починаючи з v1.1, застосунок сам перевіряє нові релізи на GitHub двічі на добу і щоразу під час відкриття. Коли виходить нова версія, приходить сповіщення, а на головному екрані з'являється кнопка **Оновити**. Вона завантажує APK і відкриває системний інсталятор, черга та історія зберігаються. Першого разу Android попросить дозволити встановлення з цього застосунку. З v1.0 ще раз завантажте APK за посиланням вище вручну.
 
 > Якщо у вас стоїть старіша збірка не з Releases, спершу видаліть її. Вона підписана іншим ключем, тому Android
 > не дасть встановити новий APK поверх неї.

@@ -5,7 +5,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -25,11 +28,24 @@ import ua.echecker.domain.StatusText
 import ua.echecker.domain.Queue
 import ua.echecker.domain.Schedule
 import ua.echecker.sync.SyncScheduler
+import ua.echecker.update.UpdateInstaller
+import ua.echecker.update.Updates
 import ua.echecker.widget.WidgetUpdater
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.io.File
 import java.time.ZonedDateTime
+
+sealed interface UpdatePhase {
+    data object Idle : UpdatePhase
+    data object Downloading : UpdatePhase
+    data class Ready(val apk: File) : UpdatePhase
+    data object Failed : UpdatePhase
+}
+
+/** A newer release is available; [phase] tracks the in-app download. */
+data class UpdateUi(val version: String, val phase: UpdatePhase)
 
 data class DaySchedule(val date: LocalDate, val intervals: List<Interval>)
 
@@ -46,6 +62,7 @@ data class MainUiState(
     val nowMinute: Int = 0,
     val status: PowerStatus = PowerStatus.QueueNotSelected,
     val statusText: StatusText? = null,
+    val update: UpdateUi? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -75,7 +92,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.repository.observeRange(day.minusDays(30), day.plusDays(1)).map { day to it }
     }
 
-    val state: StateFlow<MainUiState> = combine(
+    private val updatePhase = MutableStateFlow<UpdatePhase>(UpdatePhase.Idle)
+
+    private val scheduleState: Flow<MainUiState> = combine(
         c.settings.queue,
         schedules,
         c.settings.lastSyncAt,
@@ -99,6 +118,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             status = status,
             statusText = StatusFormatter.format(status, now, lastSync),
         )
+    }
+
+    val state: StateFlow<MainUiState> = combine(scheduleState, Updates.available(app), updatePhase) { s, release, phase ->
+        s.copy(update = release?.let { UpdateUi(it.version, phase) })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
 
     fun selectQueue(q: Queue) {
@@ -110,5 +133,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh() {
         SyncScheduler.syncNow(getApplication())
+    }
+
+    /** Download the new APK (once), then open the system installer. */
+    fun installUpdate() {
+        when (val p = updatePhase.value) {
+            is UpdatePhase.Downloading -> return
+            is UpdatePhase.Ready -> if (p.apk.exists()) return launchInstaller(p.apk)
+            else -> Unit
+        }
+        viewModelScope.launch {
+            val release = Updates.available(getApplication()).first() ?: return@launch
+            updatePhase.value = UpdatePhase.Downloading
+            updatePhase.value = try {
+                UpdatePhase.Ready(UpdateInstaller.download(getApplication(), c.downloadHttp, release))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("MainViewModel", "Update download failed", e)
+                UpdatePhase.Failed
+            }
+            (updatePhase.value as? UpdatePhase.Ready)?.let { launchInstaller(it.apk) }
+        }
+    }
+
+    private fun launchInstaller(apk: File) {
+        val ctx = getApplication<Application>()
+        // Until the user allows installs from this app, send them to that setting; the banner then offers "Встановити".
+        val intent = if (UpdateInstaller.canInstall(ctx)) UpdateInstaller.installIntent(ctx, apk) else UpdateInstaller.allowInstallsIntent(ctx)
+        ctx.startActivity(intent)
     }
 }
