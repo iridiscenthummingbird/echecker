@@ -108,6 +108,64 @@ class ScheduleRepositoryTest {
         assertEquals(listOf(LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 9)), dates)
     }
 
+    private val q32 = Queue(3, 2)
+    private val nov11 = LocalDate.of(2026, 11, 11)
+
+    private fun fullPost(id: Long) = RawPost(
+        id, now,
+        "Графік відключення на 11.11.2026:\n1.1: 10:00 – 12:00\n3.2: 14:00 – 16:00\n",
+    )
+
+    @Test fun `cancellation post clears the schedule for that date`() = runTest {
+        source.pages[null] = listOf(fullPost(1), RawPost(2, now, "ГПВ на 11 листопада скасовано."))
+        repo.sync()
+        val s = repo.get(nov11)!!
+        assertEquals(emptyMap<Queue, List<Interval>>(), s.queues)
+    }
+
+    @Test fun `partial update replaces only the listed queues`() = runTest {
+        source.pages[null] = listOf(
+            fullPost(1),
+            RawPost(2, now, "Оновлено ГПВ на 11 листопада лише для черги 3.2:\n3.2: 18:00 – 20:00"),
+        )
+        repo.sync()
+        val s = repo.get(nov11)!!
+        assertEquals(listOf(Interval(600, 720)), s.intervalsFor(q11))
+        assertEquals(listOf(Interval(1080, 1200)), s.intervalsFor(q32))
+    }
+
+    @Test fun `partial cancellation for a queue removes its outages`() = runTest {
+        source.pages[null] = listOf(
+            fullPost(1),
+            RawPost(2, now, "На 11 листопада для черги 3.2 ГПВ скасовано, решта черг без змін."),
+        )
+        repo.sync()
+        val s = repo.get(nov11)!!
+        assertEquals(listOf(Interval(600, 720)), s.intervalsFor(q11))
+        assertEquals(emptyList<Interval>(), s.intervalsFor(q32))
+    }
+
+    @Test fun `re-syncing a partial update is idempotent and an older partial is ignored`() = runTest {
+        val partial = RawPost(3, now, "Оновлено ГПВ на 11 листопада лише для черги 3.2:\n3.2: 18:00 – 20:00")
+        source.pages[null] = listOf(fullPost(1), partial)
+        repo.sync()
+        repo.sync()
+        source.pages[null] = listOf(RawPost(2, now, "Оновлено ГПВ на 11 листопада лише для черги 1.1:\n1.1: 01:00 – 02:00"))
+        repo.sync()
+        val s = repo.get(nov11)!!
+        assertEquals(listOf(Interval(600, 720)), s.intervalsFor(q11))
+        assertEquals(listOf(Interval(1080, 1200)), s.intervalsFor(q32))
+    }
+
+    @Test fun `backfill applies a partial update on top of a base from an older page`() = runTest {
+        source.pages[null] = listOf(RawPost(2, now, "Оновлено ГПВ на 11 листопада лише для черги 3.2:\n3.2: 18:00 – 20:00"))
+        source.pages[2] = listOf(fullPost(1))
+        repo.backfill(since = now.minus(Duration.ofDays(30)), maxPages = 3)
+        val s = repo.get(nov11)!!
+        assertEquals(listOf(Interval(600, 720)), s.intervalsFor(q11))
+        assertEquals(listOf(Interval(1080, 1200)), s.intervalsFor(q32))
+    }
+
     private class FakeSource : PostSource {
         val pages = mutableMapOf<Long?, List<RawPost>>()
         val requests = mutableListOf<Long?>()

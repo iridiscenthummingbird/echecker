@@ -73,7 +73,7 @@ Requires JDK 17 and the Android SDK.
 ### Limitations
 
 - The app shows **scheduled** outages only. It cannot detect actual ones.
-- It does not recognise cancellations ("скасовано") or posts that only partly update a schedule.
+- Cancellations ("ГПВ … скасовано", "не застосовуватимуться") and partial updates ("для решти черг без змін", "лише для черги 3.2") are recognised by their wording. The channel has not published such posts yet, so unusual phrasings may still be missed.
 - If Telegram changes the layout of its web preview, `ChannelFetcher` has to be updated.
 
 ---
@@ -139,5 +139,5 @@ Kotlin · Jetpack Compose (UI) · Jetpack Glance (віджет) · WorkManager �
 ### Обмеження
 
 - Застосунок показує лише **заплановані** відключення. Фактичних він не бачить.
-- Скасування («скасовано») та пости, які лише частково оновлюють графік, не розпізнаються.
+- Скасування («ГПВ … скасовано», «не застосовуватимуться») і часткові оновлення («для решти черг без змін», «лише для черги 3.2») розпізнаються за формулюваннями. Канал таких постів ще не публікував, тож незвичні формулювання можуть бути пропущені.
 - Якщо Telegram змінить верстку веб-версії каналу, доведеться оновити `ChannelFetcher`.

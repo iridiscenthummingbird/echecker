@@ -3,6 +3,7 @@ package ua.echecker.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
@@ -246,4 +247,88 @@ class ScheduleParserTest {
         assertEquals(listOf(Interval(360, 660), Interval(900, 1200)), s.intervalsFor(Queue(1, 1)))
         assertEquals(2, s.queues.size)
     }
+
+    // ---- Cancellations and partial updates ----
+
+    private fun update(text: String, ref: LocalDate = REF) = ScheduleParser.parseUpdate(text, ref)
+
+    @Test fun `cancelled GPV is a full schedule without outages`() {
+        val u = update("УВАГА! ГПВ на 11 листопада скасовано.")!!
+        assertFalse(u.partial)
+        assertEquals(Schedule(d(2026, 11, 11), emptyMap()), u.schedule)
+    }
+
+    @Test fun `other cancellation wordings are recognised`() {
+        for (text in listOf(
+            "Графіки погодинних відключень 11 листопада не застосовуватимуться.",
+            "11 листопада по Запорізькій області ГПВ не діятимуть.",
+            "Відповідно до команди НЕК «Укренерго» скасовано графіки погодинних відключень на 11.11.2026.",
+            "ГПВ НА 11 ЛИСТОПАДА\nСКАСОВАНО",
+            "Графік відключення на 11.11.2026 відмінено",
+        )) {
+            val u = update(text)
+            assertEquals(text, Schedule(d(2026, 11, 11), emptyMap()), u?.schedule)
+            assertFalse(text, u!!.partial)
+        }
+        // The convenience API also exposes a cancellation as an empty schedule.
+        assertEquals(emptyMap<Queue, List<Interval>>(), ScheduleParser.parse("ГПВ на 11 листопада скасовано", REF)!!.queues)
+    }
+
+    @Test fun `cancellations unrelated to GPV are ignored`() {
+        assertNull(update("Планові роботи 11 листопада скасовано"))
+        assertNull(update("Шановні споживачі! 11 листопада аварійні роботи відмінено."))
+        // Real post 3549: "графіків погодинних відключень … ми скасовуємо роботи" is not a GPV cancellation.
+        assertNull(update(fixture(3549), d(2026, 11, 4)))
+        assertNull(update(fixture(3549), d(2026, 11, 3)))
+    }
+
+    @Test fun `remaining queues unchanged marks a partial update`() {
+        val u = update(
+            "Оновлено ГПВ на 11 листопада.\n3.2: 10:00 – 12:00\n6.2: 14:00 – 15:00\nДля решти черг графік без змін."
+        )!!
+        assertTrue(u.partial)
+        assertEquals(
+            mapOf(Queue(3, 2) to listOf(Interval(600, 720)), Queue(6, 2) to listOf(Interval(840, 900))),
+            u.schedule.queues,
+        )
+    }
+
+    @Test fun `changes for listed queues mark a partial update`() {
+        val u = update("Зміни в ГПВ на 11.11.2026 для черг 3.2 та 6.2:\n⚡ Черга 3.2\n з 10:00 до 12:00\n⚡ Черга 6.2\n")!!
+        assertTrue(u.partial)
+        // A listed queue without intervals now has no outages.
+        assertEquals(mapOf(Queue(3, 2) to listOf(Interval(600, 720)), Queue(6, 2) to emptyList()), u.schedule.queues)
+    }
+
+    @Test fun `per-queue cancellation in a partial update`() {
+        val u = update("Оновлено ГПВ на 11 листопада лише для черг 4.1 і 4.2:\n4.1: скасовано\n4.2: 18:00 – 20:00")!!
+        assertTrue(u.partial)
+        assertEquals(mapOf(Queue(4, 1) to emptyList(), Queue(4, 2) to listOf(Interval(1080, 1200))), u.schedule.queues)
+    }
+
+    @Test fun `cancellation for listed queues without intervals`() {
+        val u = update("На 11 листопада для черг 2.1, 2.2 та 5.1 ГПВ скасовано, для інших черг без змін.")!!
+        assertTrue(u.partial)
+        assertEquals(listOf(Queue(2, 1), Queue(2, 2), Queue(5, 1)), u.schedule.queues.keys.sorted())
+        assertTrue(u.schedule.queues.values.all { it.isEmpty() })
+    }
+
+    @Test fun `full posts with omitted queues stay full`() {
+        // Real post 80871: only two queues listed, the rest have no outages — a full replacement.
+        val text = "За вказівкою НЕК «Укренерго» оновлено графіки погодинних відключень по Запорізькій області на 26 жовтня.\n\n" +
+            "Години відсутності електропостачання за чергами/ підчергами (з урахуванням 30 хвилин на перемикання):\n\n\n" +
+            "3.2: 06:30 - 10:00\n6.2: 06:30 - 10:00"
+        val u = update(text, d(2026, 10, 26))!!
+        assertFalse(u.partial)
+        assertEquals(setOf(Queue(3, 2), Queue(6, 2)), u.schedule.queues.keys)
+        val refs = mapOf(3548 to 4, 3550 to 5, 3562 to 8, 3567 to 9, 3572 to 9, 3587 to 11, 3588 to 11, 3589 to 11)
+        for ((id, day) in refs) {
+            assertFalse("post $id", update(fixture(id), d(2026, 11, day))!!.partial)
+        }
+    }
+
+    @Test fun `parse returns null for partial updates`() {
+        assertNull(ScheduleParser.parse("Оновлено ГПВ на 11 листопада лише для черги 4.1:\n4.1: 18:00 – 20:00", REF))
+    }
 }
+
