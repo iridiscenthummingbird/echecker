@@ -201,4 +201,13 @@ class ScheduleParserTest {
         val text = "Звернення 2026 листопада. ГПВ на 25 листопада\n1.1: 10:00 – 12:00"
         assertEquals(d(2026, 11, 25), ScheduleParser.parse(text, d(2026, 11, 25))!!.date)
     }
+
+    @Test fun `NBSP and minus-like dashes are accepted`() {
+        val nb = "\u00A0"
+        val text = "Графік відключення на 11.11.2026:\n⚡${nb}Черга${nb}1.1\n${nb}з${nb}10:00${nb}до${nb}12:00\n" +
+            "1.2:${nb}13:00${nb}\u2212${nb}14:00, 15:00\u201216:00\n"
+        val s = ScheduleParser.parse(text, REF)!!
+        assertEquals(listOf(Interval(600, 720)), s.intervalsFor(Queue(1, 1)))
+        assertEquals(listOf(Interval(780, 840), Interval(900, 960)), s.intervalsFor(Queue(1, 2)))
+    }
 }

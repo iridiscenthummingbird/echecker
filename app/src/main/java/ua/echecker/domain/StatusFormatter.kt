@@ -40,6 +40,7 @@ object StatusFormatter {
         return when {
             local.toLocalDate() == now.toLocalDate() -> "о ${TIME.format(local)}"
             local.toLocalDate() == tomorrow && local.toLocalTime() == LocalTime.MIDNIGHT -> "о 24:00"
+            local.toLocalDate() == tomorrow.plusDays(1) && local.toLocalTime() == LocalTime.MIDNIGHT -> "завтра о 24:00"
             else -> "завтра о ${TIME.format(local)}"
         }
     }

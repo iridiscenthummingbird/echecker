@@ -76,8 +76,8 @@ private fun WidgetContent(text: StatusText) {
     ) {
         Text(
             text.title,
-            style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
-            maxLines = 1,
+            style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
+            maxLines = 2,
         )
         text.subtitle?.let {
             Text(it, style = TextStyle(fontSize = 13.sp, color = GlanceTheme.colors.onSurface), maxLines = 1)

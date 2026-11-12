@@ -13,10 +13,13 @@ object ScheduleParser {
         """(?<!\d)(\d{1,2})\s+(${MONTHS.joinToString("|")})""",
         RegexOption.IGNORE_CASE
     )
-    private val QUEUE = Regex("""Черга\s+(\d)\.(\d)""")
-    private val BLOCK_INTERVAL = Regex("""^\s*[зЗ]\s+(\d{1,2}):(\d{2})\s+до\s+(\d{1,2}):(\d{2})\s*$""")
-    private val COMPACT_LINE = Regex("""^\s*(\d)\.(\d)\s*:\s*(.+)$""")
-    private val COMPACT_INTERVAL = Regex("""(\d{1,2}):(\d{2})\s*[–—-]\s*(\d{1,2}):(\d{2})""")
+    // WS also matches NBSP (U+00A0); DASH also accepts − (U+2212) and ‒ (U+2012).
+    private const val WS = """[\s\u00A0]"""
+    private const val DASH = """[–—\-\u2212\u2012]"""
+    private val QUEUE = Regex("""Черга$WS+(\d)\.(\d)""")
+    private val BLOCK_INTERVAL = Regex("""^$WS*[зЗ]$WS+(\d{1,2}):(\d{2})$WS+до$WS+(\d{1,2}):(\d{2})$WS*$""")
+    private val COMPACT_LINE = Regex("""^$WS*(\d)\.(\d)$WS*:$WS*(.+)$""")
+    private val COMPACT_INTERVAL = Regex("""(\d{1,2}):(\d{2})$WS*$DASH$WS*(\d{1,2}):(\d{2})""")
 
     /** [referenceDate] = the post's publish date in Kyiv; used to infer the year when the post omits it. */
     fun parse(text: String, referenceDate: LocalDate): Schedule? {

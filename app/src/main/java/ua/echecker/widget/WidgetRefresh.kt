@@ -44,6 +44,8 @@ object WidgetStateLoader {
 /** Re-renders the widget from cache at the next status change or next midnight, whichever is first. */
 object WidgetRefreshScheduler {
     private const val SLACK_MS = 5_000L
+    /** No exact-alarm permission: the alarm may fire anywhere in this window (and later in Doze). */
+    private const val WINDOW_MS = 10 * 60_000L
 
     fun scheduleNext(context: Context, status: PowerStatus, now: ZonedDateTime) {
         val nextMidnight = now.toLocalDate().plusDays(1).atStartOfDay(KyivTime.ZONE)
@@ -60,7 +62,7 @@ object WidgetRefreshScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         context.getSystemService(AlarmManager::class.java)
-            .setAndAllowWhileIdle(AlarmManager.RTC, at.toEpochMilli() + SLACK_MS, pi)
+            .setWindow(AlarmManager.RTC, at.toEpochMilli() + SLACK_MS, WINDOW_MS, pi)
     }
 }
 

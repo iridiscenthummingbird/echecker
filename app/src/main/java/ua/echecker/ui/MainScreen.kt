@@ -57,7 +57,8 @@ fun MainScreen(state: MainUiState, onSelectQueue: (Queue) -> Unit, onRefresh: ()
             item { Text("Оберіть чергу, щоб бачити графік") }
             return@LazyColumn
         }
-        item { DayCard("Сьогодні", state.today, emptyText = "Відключень не заплановано") }
+        val todayEmpty = if (state.lastSyncAt == null) "Немає даних" else "Відключень не заплановано"
+        item { DayCard("Сьогодні", state.today, emptyText = todayEmpty) }
         item { DayCard("Завтра", state.tomorrow, emptyText = "Графік ще не опубліковано") }
         item { SyncRow(state.lastSyncAt, state.refreshing, onRefresh) }
         item {

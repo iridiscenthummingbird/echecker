@@ -35,6 +35,10 @@ class StatusFormatterTest {
         assertEquals("увімкнуть завтра о 01:00", fmt(PowerStatus.Off(t(1, 1, 0))).subtitle)
     }
 
+    @Test fun `off until the end of tomorrow shows tomorrow 24_00`() {
+        assertEquals("увімкнуть завтра о 24:00", fmt(PowerStatus.Off(t(2, 0, 0))).subtitle)
+    }
+
     @Test fun `other states`() {
         assertEquals(StatusText("Відключень не заплановано", null, null), fmt(PowerStatus.NoScheduleToday))
         assertEquals(StatusText("Немає даних", "відкрийте застосунок", null), fmt(PowerStatus.NoData, null))
