@@ -5,6 +5,12 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
+}
+
+// Every DB version's schema is committed under app/schemas/: migrations are written and tested against them.
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 android {
@@ -46,6 +52,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     testOptions { unitTests.isIncludeAndroidResources = true }
+    // MigrationTestHelper reads the exported schemas from the app's assets; Robolectric serves the debug
+    // variant's merged assets (not test ones), so they ship in debug builds only — never in release.
+    sourceSets.getByName("debug").assets.srcDir("$projectDir/schemas")
 }
 
 kotlin {
@@ -74,4 +83,5 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.room.testing)
 }

@@ -1,12 +1,12 @@
 package ua.echecker.data
 
-import android.content.Context
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
+import androidx.room.testing.MigrationTestHelper
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.test.runTest
-import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -15,29 +15,34 @@ import ua.echecker.domain.Interval
 import ua.echecker.domain.Queue
 import java.time.LocalDate
 
+/**
+ * Migrations are tested against the schemas committed in app/schemas/ (Room validates the migrated database
+ * against the target schema). Add a test here for every new migration.
+ */
 @RunWith(RobolectricTestRunner::class)
 class MigrationTest {
-    private val context: Context = ApplicationProvider.getApplicationContext()
-    private val name = "migration-test.db"
+    private val dbName = "migration-test.db"
 
-    @After fun tearDown() {
-        context.deleteDatabase(name)
-    }
+    @get:Rule
+    val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), AppDatabase::class.java)
 
-    @Test fun `v2 database keeps its history after migrating to v3`() = runTest {
-        // The exact schema Room 2.7 generated for v2 (identity hash included).
-        SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null).use { db ->
-            db.execSQL("CREATE TABLE IF NOT EXISTS `schedules` (`date` TEXT NOT NULL, `postId` INTEGER NOT NULL, `contentHash` INTEGER NOT NULL, PRIMARY KEY(`date`))")
-            db.execSQL("CREATE TABLE IF NOT EXISTS `intervals` (`date` TEXT NOT NULL, `queue` TEXT NOT NULL, `startMinute` INTEGER NOT NULL, `endMinute` INTEGER NOT NULL, PRIMARY KEY(`date`, `queue`, `startMinute`), FOREIGN KEY(`date`) REFERENCES `schedules`(`date`) ON UPDATE NO ACTION ON DELETE CASCADE )")
-            db.execSQL("CREATE INDEX IF NOT EXISTS `index_intervals_date` ON `intervals` (`date`)")
-            db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)")
-            db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e8ccc7ef5e6b5ead39b2afc770daa18c')")
-            db.execSQL("INSERT INTO schedules VALUES ('2026-11-10', 3500, 1)")
-            db.execSQL("INSERT INTO intervals VALUES ('2026-11-10', '1.1', 600, 720)")
-            db.version = 2
+    @Test fun `2 to 3 keeps the history and marks it as coming from the primary channel`() = runTest {
+        helper.createDatabase(dbName, 2).apply {
+            execSQL("INSERT INTO schedules VALUES ('2026-11-10', 3500, 1)")
+            execSQL("INSERT INTO intervals VALUES ('2026-11-10', '1.1', 600, 720)")
+            close()
         }
 
-        val room = Room.databaseBuilder(context, AppDatabase::class.java, name)
+        helper.runMigrationsAndValidate(dbName, 3, true, AppDatabase.MIGRATION_2_3).apply {
+            query("SELECT source FROM schedules WHERE date = '2026-11-10'").use {
+                it.moveToFirst()
+                assertEquals("zoe_alarm", it.getString(0))
+            }
+            close()
+        }
+
+        // And the app reads it through Room as before.
+        val room = Room.databaseBuilder(ApplicationProvider.getApplicationContext(), AppDatabase::class.java, dbName)
             .addMigrations(AppDatabase.MIGRATION_2_3)
             .allowMainThreadQueries()
             .build()
@@ -46,9 +51,7 @@ class MigrationTest {
                 override val id = "zoe_alarm"
                 override suspend fun fetch(before: Long?) = emptyList<RawPost>()
             })
-            val s = repo.get(LocalDate.of(2026, 11, 10))!!
-            assertEquals(listOf(Interval(600, 720)), s.intervalsFor(Queue(1, 1)))
-            assertEquals("zoe_alarm", room.scheduleDao().get("2026-11-10")!!.schedule.source)
+            assertEquals(listOf(Interval(600, 720)), repo.get(LocalDate.of(2026, 11, 10))!!.intervalsFor(Queue(1, 1)))
         } finally {
             room.close()
         }
