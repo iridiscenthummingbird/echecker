@@ -7,6 +7,7 @@ import org.junit.Test
 import java.time.LocalDate
 
 class ScheduleParserTest {
+    private val REF = LocalDate.of(2026, 11, 11)
     private val sample = """
         ОНОВЛЕННЯ! Графік відключення на 11.11.2026 (середа) для абонентів ЗАПОРІЖЖЯОБЛЕНЕРГО:
 
@@ -55,13 +56,13 @@ class ScheduleParserTest {
     """.trimIndent()
 
     @Test fun `parses date and all queues`() {
-        val s = ScheduleParser.parse(sample)!!
+        val s = ScheduleParser.parse(sample, REF)!!
         assertEquals(LocalDate.of(2026, 11, 11), s.date)
         assertEquals(12, s.queues.size)
     }
 
     @Test fun `parses multiple intervals and 24_00`() {
-        val s = ScheduleParser.parse(sample)!!
+        val s = ScheduleParser.parse(sample, REF)!!
         assertEquals(
             listOf(Interval(330, 420), Interval(960, 1170), Interval(1410, 1440)),
             s.intervalsFor(Queue(2, 1))
@@ -72,24 +73,116 @@ class ScheduleParserTest {
 
     @Test fun `parses text with emoji prefix and spaced exclamation`() {
         val text = "🔥 ОНОВЛЕННЯ ! Графік відключення на 09.11.2026 (понеділок) для абонентів:\n\n⚡ Черга 1.1\n з 06:30 до 10:30\n"
-        val s = ScheduleParser.parse(text)!!
+        val s = ScheduleParser.parse(text, REF)!!
         assertEquals(LocalDate.of(2026, 11, 9), s.date)
         assertEquals(listOf(Interval(390, 630)), s.intervalsFor(Queue(1, 1)))
     }
 
     @Test fun `returns null for non-schedule post`() {
-        assertNull(ScheduleParser.parse("За вказівкою НЕК “Укренерго” оновлено ГПВ на 11 Листопада."))
+        assertNull(ScheduleParser.parse("За вказівкою НЕК “Укренерго” оновлено ГПВ на 11 Листопада.", REF))
     }
 
     @Test fun `queue without intervals is absent`() {
         val text = "Графік відключення на 11.11.2026:\n⚡ Черга 1.1\n⚡ Черга 1.2\n з 10:00 до 12:00\n"
-        val s = ScheduleParser.parse(text)!!
+        val s = ScheduleParser.parse(text, REF)!!
         assertFalse(s.queues.containsKey(Queue(1, 1)))
         assertEquals(listOf(Interval(600, 720)), s.intervalsFor(Queue(1, 2)))
     }
 
     @Test fun `merges overlapping intervals within queue`() {
         val text = "Графік відключення на 11.11.2026:\n⚡ Черга 1.1\n з 15:30 до 19:30\n з 19:00 до 24:00\n"
-        assertEquals(listOf(Interval(930, 1440)), ScheduleParser.parse(text)!!.intervalsFor(Queue(1, 1)))
+        assertEquals(listOf(Interval(930, 1440)), ScheduleParser.parse(text, REF)!!.intervalsFor(Queue(1, 1)))
+    }
+
+    private fun fixture(id: Int) =
+        javaClass.classLoader!!.getResource("posts/post_$id.txt")!!.readText()
+
+    private fun d(y: Int, m: Int, day: Int) = LocalDate.of(y, m, day)
+
+    @Test fun `post 3587 block layout with month name`() {
+        val s = ScheduleParser.parse(fixture(3587), d(2026, 11, 11))!!
+        assertEquals(d(2026, 11, 11), s.date)
+        assertEquals(12, s.queues.size)
+        assertEquals(
+            listOf(Interval(330, 420), Interval(960, 1170), Interval(1410, 1440)),
+            s.intervalsFor(Queue(2, 2))
+        )
+    }
+
+    @Test fun `post 3588 footer is not attributed to a queue`() {
+        val s = ScheduleParser.parse(fixture(3588), d(2026, 11, 11))!!
+        assertEquals(d(2026, 11, 12), s.date)
+        assertEquals(
+            listOf(Interval(240, 540), Interval(780, 1080), Interval(1320, 1440)),
+            s.intervalsFor(Queue(6, 2))
+        )
+        assertEquals(listOf(Interval(780, 1080)), s.intervalsFor(Queue(1, 1)))
+    }
+
+    @Test fun `post 3550 compact layout`() {
+        val s = ScheduleParser.parse(fixture(3550), d(2026, 11, 5))!!
+        assertEquals(d(2026, 11, 5), s.date)
+        assertEquals(
+            listOf(Interval(0, 300), Interval(540, 840), Interval(1080, 1350)),
+            s.intervalsFor(Queue(1, 1))
+        )
+        assertEquals(listOf(Interval(270, 570), Interval(810, 1110)), s.intervalsFor(Queue(2, 2)))
+        assertEquals(12, s.queues.size)
+    }
+
+    @Test fun `post 3548 tomorrow compact`() {
+        val s = ScheduleParser.parse(fixture(3548), d(2026, 11, 4))!!
+        assertEquals(d(2026, 11, 5), s.date)
+        assertEquals(12, s.queues.size)
+    }
+
+    @Test fun `post 3572 compact`() {
+        val s = ScheduleParser.parse(fixture(3572), d(2026, 11, 9))!!
+        assertEquals(d(2026, 11, 10), s.date)
+        assertEquals(listOf(Interval(600, 900), Interval(1140, 1440)), s.intervalsFor(Queue(1, 1)))
+    }
+
+    @Test fun `post 3562 block`() {
+        val s = ScheduleParser.parse(fixture(3562), d(2026, 11, 8))!!
+        assertEquals(d(2026, 11, 8), s.date)
+        assertEquals(listOf(Interval(0, 300), Interval(540, 810)), s.intervalsFor(Queue(1, 1)))
+    }
+
+    @Test fun `post 3567 block without leading space`() {
+        val s = ScheduleParser.parse(fixture(3567), d(2026, 11, 9))!!
+        assertEquals(d(2026, 11, 9), s.date)
+        assertEquals(listOf(Interval(390, 630), Interval(870, 1170)), s.intervalsFor(Queue(1, 1)))
+    }
+
+    @Test fun `post 3589 numeric format`() {
+        val s = ScheduleParser.parse(fixture(3589), d(2026, 11, 11))!!
+        assertEquals(d(2026, 11, 11), s.date)
+        assertEquals(12, s.queues.size)
+    }
+
+    @Test fun `post 3549 news is not a schedule`() {
+        assertNull(ScheduleParser.parse(fixture(3549), d(2026, 11, 5)))
+    }
+
+    @Test fun `year inference across new year`() {
+        assertEquals(
+            d(2027, 1, 2),
+            ScheduleParser.parse("оновлено ГПВ на 02 січня\n1.1: 10:00 – 12:00", d(2026, 12, 31))!!.date
+        )
+        assertEquals(
+            d(2026, 12, 31),
+            ScheduleParser.parse("оновлено ГПВ на 31 грудня\n1.1: 10:00 – 12:00", d(2027, 1, 1))!!.date
+        )
+    }
+
+    @Test fun `invalid minutes are skipped`() {
+        val text = "на 11 листопада\n⚡ Черга 1.1\n з 10:75 до 12:00\n⚡ Черга 1.2\n з 10:00 до 12:00\n"
+        val s = ScheduleParser.parse(text, REF)!!
+        assertFalse(s.queues.containsKey(Queue(1, 1)))
+        assertEquals(listOf(Interval(600, 720)), s.intervalsFor(Queue(1, 2)))
+    }
+
+    @Test fun `header only text is null`() {
+        assertNull(ScheduleParser.parse("Графік відключення на 11.11.2026:\n⚡ Черга 1.1\n", REF))
     }
 }

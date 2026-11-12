@@ -7,6 +7,7 @@ import ua.echecker.data.db.ScheduleDao
 import ua.echecker.data.db.ScheduleEntity
 import ua.echecker.data.db.ScheduleWithIntervals
 import ua.echecker.domain.Interval
+import ua.echecker.domain.KyivTime
 import ua.echecker.domain.Queue
 import ua.echecker.domain.Schedule
 import ua.echecker.domain.ScheduleParser
@@ -41,7 +42,7 @@ class ScheduleRepository(
 
     private suspend fun save(posts: List<RawPost>) {
         for (post in posts) {
-            val schedule = ScheduleParser.parse(post.text) ?: continue
+            val schedule = ScheduleParser.parse(post.text, post.publishedAt.atZone(KyivTime.ZONE).toLocalDate()) ?: continue
             val date = schedule.date.toString()
             dao.upsertIfNewer(
                 ScheduleEntity(date, post.id),

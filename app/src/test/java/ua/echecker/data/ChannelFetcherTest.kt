@@ -32,7 +32,7 @@ class ChannelFetcherTest {
     }
 
     @Test fun `parsed text is understood by ScheduleParser`() {
-        val s = ScheduleParser.parse(posts[1].text)!!
+        val s = ScheduleParser.parse(posts[1].text, java.time.LocalDate.of(2026, 11, 9))!!
         assertEquals(LocalDate.of(2026, 11, 9), s.date)
         assertEquals(listOf(Interval(1140, 1440)), s.intervalsFor(Queue(1, 2)))
     }
