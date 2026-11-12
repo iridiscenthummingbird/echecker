@@ -1,113 +1,520 @@
 package ua.echecker.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ua.echecker.domain.Interval
 import ua.echecker.domain.KyivTime
+import ua.echecker.domain.PowerStatus
 import ua.echecker.domain.Queue
+import ua.echecker.domain.StatusText
+import ua.echecker.ui.theme.Power
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val DAY = DateTimeFormatter.ofPattern("dd.MM, EEE", Locale.forLanguageTag("uk"))
+private val UK = Locale.forLanguageTag("uk")
+private val DAY = DateTimeFormatter.ofPattern("dd.MM, EEE", UK)
+private val DAY_SHORT = DateTimeFormatter.ofPattern("dd.MM", UK)
+private val WEEKDAY = DateTimeFormatter.ofPattern("EEE", UK)
 private val SYNC = DateTimeFormatter.ofPattern("dd.MM HH:mm")
+
+private val CardShape = RoundedCornerShape(24.dp)
+
+@Composable
+fun MainScreen(state: MainUiState, onSelectQueue: (Queue) -> Unit, onRefresh: () -> Unit) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        LazyColumn(
+            modifier = Modifier.safeDrawingPadding(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item { Header(state.queue, state.loaded) }
+            if (!state.loaded) return@LazyColumn
+            if (state.queue != null) {
+                item { StatusHero(state.status, state.statusText, state.today?.intervals, state.nowMinute) }
+            }
+            item { QueuePicker(state.queue, onSelectQueue) }
+            if (state.queue == null) {
+                item {
+                    Text(
+                        "Оберіть чергу, щоб бачити графік",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                return@LazyColumn
+            }
+            val todayEmpty = if (state.lastSyncAt == null) "Немає даних" else "Відключень не заплановано"
+            item { DayCard("Сьогодні", state.today, todayEmpty, nowMinute = state.nowMinute) }
+            item { DayCard("Завтра", state.tomorrow, "Графік ще не опубліковано", nowMinute = null) }
+            item { SyncRow(state.lastSyncAt, state.refreshing, onRefresh) }
+            item { SectionTitle("Історія", Modifier.padding(top = 6.dp, start = 4.dp)) }
+            if (state.history.isEmpty()) {
+                item { Text("Історія поки порожня", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            } else {
+                item { HistoryCard(state.history) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Header(queue: Queue?, loaded: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(13.dp))
+                .background(Brush.linearGradient(Power.colors.heroOn)),
+            contentAlignment = Alignment.Center,
+        ) { Bolt(Power.colors.onHeroOn, Modifier.size(20.dp)) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Графік світла", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                when {
+                    !loaded -> ""
+                    queue != null -> "Черга $queue"
+                    else -> "Черга не обрана"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun Bolt(color: Color, modifier: Modifier) {
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply {
+            moveTo(w * 0.58f, 0f)
+            lineTo(w * 0.12f, h * 0.58f)
+            lineTo(w * 0.48f, h * 0.58f)
+            lineTo(w * 0.40f, h)
+            lineTo(w * 0.88f, h * 0.40f)
+            lineTo(w * 0.52f, h * 0.40f)
+            close()
+        }
+        drawPath(path, color)
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text.uppercase(UK),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
+
+// ---- Hero: current status ----
+
+private data class HeroStyle(val gradient: List<Color>, val fg: Color, val title: String, val emoji: String)
+
+@Composable
+private fun StatusHero(status: PowerStatus, text: StatusText?, today: List<Interval>?, nowMinute: Int) {
+    val pc = Power.colors
+    val (gradient, fg, title, emoji) = when (status) {
+        is PowerStatus.On -> HeroStyle(pc.heroOn, pc.onHeroOn, "Світло є", "💡")
+        is PowerStatus.Off -> HeroStyle(pc.heroOff, pc.onHeroOff, "Світла немає", "🌙")
+        else -> HeroStyle(pc.heroNeutral, pc.onHeroNeutral, text?.title.orEmpty(), "🔌")
+    }
+    val accent = if (status is PowerStatus.Off) pc.heroOffAccent else fg
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(Brush.linearGradient(gradient)),
+    ) {
+        // Decorative concentric rings in the top-right corner.
+        Canvas(Modifier.matchParentSize()) {
+            val c = Offset(size.width * 0.95f, size.height * 0.05f)
+            listOf(0.45f, 0.75f, 1.05f).forEach { k ->
+                drawCircle(fg.copy(alpha = 0.07f), radius = size.height * k, center = c)
+            }
+        }
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(fg.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) { Text(emoji, style = MaterialTheme.typography.titleLarge) }
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(
+                        "ЗАРАЗ",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = fg.copy(alpha = 0.65f),
+                    )
+                    Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = fg)
+                }
+            }
+            text?.subtitle?.let {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    it.replaceFirstChar { c -> c.uppercase(UK) },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = accent,
+                )
+            }
+            text?.staleNote?.let {
+                Text("⚠ $it", style = MaterialTheme.typography.bodySmall, color = fg.copy(alpha = 0.75f))
+            }
+            if (!today.isNullOrEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Timeline(
+                    intervals = today,
+                    nowMinute = nowMinute,
+                    height = 10.dp,
+                    onColor = fg.copy(alpha = 0.2f),
+                    offColor = fg.copy(alpha = 0.85f),
+                    markerColor = if (status is PowerStatus.Off) pc.heroOffAccent else pc.nowMarker,
+                )
+                Spacer(Modifier.height(4.dp))
+                HourLabels(fg.copy(alpha = 0.65f))
+            }
+        }
+    }
+}
+
+// ---- Queue picker ----
+
+@Composable
+private fun QueuePicker(selected: Queue?, onSelect: (Queue) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+    ) {
+        SectionTitle("Ваша черга")
+        Spacer(Modifier.height(12.dp))
+        Queue.ALL.chunked(6).forEachIndexed { i, row ->
+            if (i > 0) Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { q -> QueuePill(q, q == selected, { onSelect(q) }, Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QueuePill(q: Queue, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        modifier
+            .height(44.dp)
+            .clip(shape)
+            .then(
+                if (selected) {
+                    Modifier.background(Brush.verticalGradient(Power.colors.heroOn))
+                } else {
+                    Modifier
+                        .background(cs.surfaceVariant.copy(alpha = 0.6f))
+                        .border(1.dp, cs.outlineVariant, shape)
+                },
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            q.toString(),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
+            color = if (selected) Power.colors.onHeroOn else cs.onSurface,
+        )
+    }
+}
+
+// ---- Day cards ----
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MainScreen(state: MainUiState, onSelectQueue: (Queue) -> Unit, onRefresh: () -> Unit) {
-    LazyColumn(
-        modifier = Modifier.safeDrawingPadding(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+private fun DayCard(title: String, day: DaySchedule?, emptyText: String, nowMinute: Int?) {
+    val cs = MaterialTheme.colorScheme
+    val pc = Power.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(cs.surface)
+            .padding(18.dp),
     ) {
-        item { Text("Ваша черга", style = MaterialTheme.typography.titleMedium) }
-        item {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Queue.ALL.forEach { q ->
-                    FilterChip(
-                        selected = q == state.queue,
-                        onClick = { onSelectQueue(q) },
-                        label = { Text(q.toString()) },
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (day != null) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "${DAY_SHORT.format(day.date)} · ${WEEKDAY.format(day.date)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                OffBadge(day.intervals)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        if (day == null) {
+            Text(emptyText, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            return@Column
+        }
+        Timeline(day.intervals, nowMinute, 18.dp, pc.on, pc.off, pc.nowMarker)
+        Spacer(Modifier.height(4.dp))
+        HourLabels(cs.onSurfaceVariant)
+        Spacer(Modifier.height(14.dp))
+        if (day.intervals.isEmpty()) {
+            Text("Без відключень 🎉", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                day.intervals.forEach {
+                    IntervalPill(it, active = nowMinute != null && nowMinute in it.startMinute until it.endMinute)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IntervalPill(i: Interval, active: Boolean) {
+    val pc = Power.colors
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier
+            .clip(shape)
+            .background(pc.off)
+            .then(if (active) Modifier.border(2.dp, pc.nowMarker, shape) else Modifier)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(if (active) pc.nowMarker else pc.onOff.copy(alpha = 0.5f)),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(i.format(), style = MaterialTheme.typography.labelLarge, color = pc.onOff)
+    }
+}
+
+@Composable
+private fun OffBadge(intervals: List<Interval>) {
+    val cs = MaterialTheme.colorScheme
+    Text(
+        if (intervals.isEmpty()) "0 год" else "−${formatHours(intervals.offMinutes())}",
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = cs.onSecondaryContainer,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(cs.secondaryContainer)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    )
+}
+
+// ---- Timeline ----
+
+/** A 24h bar: [onColor] base, [offColor] outage segments, optional "now" marker. */
+@Composable
+private fun Timeline(
+    intervals: List<Interval>,
+    nowMinute: Int?,
+    height: Dp,
+    onColor: Color,
+    offColor: Color,
+    markerColor: Color,
+) {
+    Canvas(
+        Modifier
+            .fillMaxWidth()
+            .height(height + 8.dp),
+    ) {
+        val barTop = 4.dp.toPx()
+        val barH = height.toPx()
+        drawRoundRect(
+            onColor,
+            topLeft = Offset(0f, barTop),
+            size = Size(size.width, barH),
+            cornerRadius = CornerRadius(barH / 2),
+        )
+        for (h in listOf(6, 12, 18)) {
+            val x = size.width * h / 24f
+            drawLine(offColor.copy(alpha = 0.2f), Offset(x, barTop), Offset(x, barTop + barH), strokeWidth = 1.dp.toPx())
+        }
+        intervals.forEach { i ->
+            val x0 = size.width * i.startMinute / 1440f
+            val x1 = size.width * i.endMinute / 1440f
+            drawRoundRect(
+                offColor,
+                topLeft = Offset(x0, barTop),
+                size = Size((x1 - x0).coerceAtLeast(2f), barH),
+                cornerRadius = CornerRadius(barH / 3),
+            )
+        }
+        if (nowMinute != null) {
+            val x = (size.width * nowMinute / 1440f).coerceIn(2.dp.toPx(), size.width - 2.dp.toPx())
+            drawLine(markerColor, Offset(x, 2.dp.toPx()), Offset(x, size.height), strokeWidth = 3.dp.toPx())
+            drawCircle(markerColor, radius = 4.dp.toPx(), center = Offset(x, 4.dp.toPx()))
+        }
+    }
+}
+
+@Composable
+private fun HourLabels(color: Color) {
+    Row(Modifier.fillMaxWidth()) {
+        listOf("00", "06", "12", "18", "24").forEachIndexed { i, h ->
+            val edge = i == 0 || i == 4
+            Text(
+                h,
+                style = MaterialTheme.typography.labelSmall,
+                color = color,
+                textAlign = when (i) {
+                    0 -> TextAlign.Start
+                    4 -> TextAlign.End
+                    else -> TextAlign.Center
+                },
+                modifier = Modifier.weight(if (edge) 0.5f else 1f),
+            )
+        }
+    }
+}
+
+// ---- Sync ----
+
+@Composable
+private fun SyncRow(lastSyncAt: Instant?, refreshing: Boolean, onRefresh: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
+        Box(
+            Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(if (lastSyncAt != null) Color(0xFF3BB273) else cs.outline),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            lastSyncAt?.let { "Оновлено ${SYNC.format(it.atZone(KyivTime.ZONE))}" } ?: "Ще не оновлювалось",
+            style = MaterialTheme.typography.bodySmall,
+            color = cs.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Button(
+            onClick = onRefresh,
+            enabled = !refreshing,
+            colors = ButtonDefaults.buttonColors(containerColor = cs.secondary, contentColor = cs.onSecondary),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            if (refreshing) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.onSecondary)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text("↻  Оновити", fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+// ---- History ----
+
+@Composable
+private fun HistoryCard(history: List<DaySchedule>) {
+    val cs = MaterialTheme.colorScheme
+    val pc = Power.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(cs.surface)
+            .padding(horizontal = 18.dp, vertical = 4.dp),
+    ) {
+        history.forEachIndexed { idx, day ->
+            if (idx > 0) HorizontalDivider(color = cs.outlineVariant)
+            Column(Modifier.padding(vertical = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(DAY.format(day.date), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        if (day.intervals.isEmpty()) "без відключень"
+                        else "без світла ${formatHours(day.intervals.offMinutes())}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Timeline(day.intervals, null, 8.dp, pc.on.copy(alpha = 0.6f), pc.off, pc.nowMarker)
+                if (day.intervals.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        day.intervals.joinToString("   ") { it.format() },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
                     )
                 }
             }
         }
-        if (state.queue == null) {
-            item { Text("Оберіть чергу, щоб бачити графік") }
-            return@LazyColumn
-        }
-        val todayEmpty = if (state.lastSyncAt == null) "Немає даних" else "Відключень не заплановано"
-        item { DayCard("Сьогодні", state.today, emptyText = todayEmpty) }
-        item { DayCard("Завтра", state.tomorrow, emptyText = "Графік ще не опубліковано") }
-        item { SyncRow(state.lastSyncAt, state.refreshing, onRefresh) }
-        item {
-            HorizontalDivider()
-            Text("Історія", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
-        }
-        if (state.history.isEmpty()) {
-            item { Text("Історія поки порожня") }
-        }
-        items(state.history, key = { it.date.toString() }) { day ->
-            Row(Modifier.fillMaxWidth()) {
-                Text(DAY.format(day.date), modifier = Modifier.width(110.dp))
-                Text(day.intervals.toText())
-            }
-        }
     }
 }
 
-@Composable
-private fun DayCard(title: String, day: DaySchedule?, emptyText: String) {
-    Card(Modifier.fillMaxWidth()) {
-        Text(
-            if (day != null) "$title · ${DAY.format(day.date)}" else title,
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
-        )
-        Text(
-            day?.intervals?.toText() ?: emptyText,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(16.dp),
-        )
-    }
-}
+private fun List<Interval>.offMinutes(): Int = sumOf { it.endMinute - it.startMinute }
 
-@Composable
-private fun SyncRow(lastSyncAt: Instant?, refreshing: Boolean, onRefresh: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            lastSyncAt?.let { "Оновлено ${SYNC.format(it.atZone(KyivTime.ZONE))}" } ?: "Ще не оновлювалось",
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.weight(1f),
-        )
-        if (refreshing) {
-            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(12.dp))
-        }
-        Button(onClick = onRefresh, enabled = !refreshing) { Text("Оновити") }
-    }
+private fun formatHours(minutes: Int): String {
+    val h = minutes / 60
+    val m = minutes % 60
+    return if (m == 0) "$h год" else "$h год $m хв"
 }
-
-private fun List<ua.echecker.domain.Interval>.toText(): String =
-    if (isEmpty()) "Без відключень" else joinToString(", ") { it.format() }
