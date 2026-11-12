@@ -73,7 +73,7 @@ class ScheduleParserTest {
 
     @Test fun `parses text with emoji prefix and spaced exclamation`() {
         val text = "🔥 ОНОВЛЕННЯ ! Графік відключення на 09.11.2026 (понеділок) для абонентів:\n\n⚡ Черга 1.1\n з 06:30 до 10:30\n"
-        val s = ScheduleParser.parse(text, REF)!!
+        val s = ScheduleParser.parse(text, LocalDate.of(2026, 11, 9))!!
         assertEquals(LocalDate.of(2026, 11, 9), s.date)
         assertEquals(listOf(Interval(390, 630)), s.intervalsFor(Queue(1, 1)))
     }
@@ -184,5 +184,21 @@ class ScheduleParserTest {
 
     @Test fun `header only text is null`() {
         assertNull(ScheduleParser.parse("Графік відключення на 11.11.2026:\n⚡ Черга 1.1\n", REF))
+    }
+
+    @Test fun `skips an implausible earlier date and picks the schedule date`() {
+        val text = "З 03 листопада діють ГПВ. Графік на сьогодні, 12 листопада:\n1.1: 10:00 – 12:00"
+        assertEquals(d(2026, 11, 12), ScheduleParser.parse(text, d(2026, 11, 12))!!.date)
+    }
+
+    @Test fun `schedule dated far from the reference date is null`() {
+        assertNull(ScheduleParser.parse("Графік відключення на 12.12.2026:\n1.1: 10:00 – 12:00", d(2026, 11, 12)))
+        assertNull(ScheduleParser.parse("оновлено ГПВ на 12 грудня\n1.1: 10:00 – 12:00", d(2026, 11, 12)))
+    }
+
+    @Test fun `year digits are not read as a named-date day`() {
+        // "2026 листопада" must not yield day 26 (which would be plausible here); the real date is 25 листопада.
+        val text = "Звернення 2026 листопада. ГПВ на 25 листопада\n1.1: 10:00 – 12:00"
+        assertEquals(d(2026, 11, 25), ScheduleParser.parse(text, d(2026, 11, 25))!!.date)
     }
 }

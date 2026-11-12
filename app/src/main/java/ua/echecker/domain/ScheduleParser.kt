@@ -10,7 +10,7 @@ object ScheduleParser {
         "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"
     )
     private val NAMED_DATE = Regex(
-        """(\d{1,2})\s+(${MONTHS.joinToString("|")})""",
+        """(?<!\d)(\d{1,2})\s+(${MONTHS.joinToString("|")})""",
         RegexOption.IGNORE_CASE
     )
     private val QUEUE = Regex("""Черга\s+(\d)\.(\d)""")
@@ -60,21 +60,26 @@ object ScheduleParser {
         raw.getOrPut(queue) { mutableListOf() } += Interval(start, end)
     }
 
+    /** First date in the text (numeric headers first, then named-month dates) within [ref − 1 day, ref + 2 days]. */
     private fun findDate(text: String, ref: LocalDate): LocalDate? {
-        val numeric = NUMERIC_DATE.find(text)
-        if (numeric != null) {
-            val (d, m, y) = numeric.destructured
-            return runCatching { LocalDate.of(y.toInt(), m.toInt(), d.toInt()) }.getOrNull()
+        val numeric = NUMERIC_DATE.findAll(text).map { m ->
+            val (d, mo, y) = m.destructured
+            runCatching { LocalDate.of(y.toInt(), mo.toInt(), d.toInt()) }.getOrNull()
         }
-        val named = NAMED_DATE.find(text) ?: return null
-        val day = named.groupValues[1].toInt()
-        val month = MONTHS.indexOf(named.groupValues[2].lowercase()) + 1
-        val date = runCatching { LocalDate.of(ref.year, month, day) }.getOrNull() ?: return null
-        val diff = ChronoUnit.DAYS.between(ref, date)
-        return when {
-            diff < -180 -> date.plusYears(1)
-            diff > 180 -> date.minusYears(1)
-            else -> date
+        val named = NAMED_DATE.findAll(text).map { m ->
+            val day = m.groupValues[1].toInt()
+            val month = MONTHS.indexOf(m.groupValues[2].lowercase()) + 1
+            runCatching { LocalDate.of(ref.year, month, day) }.getOrNull()?.let { date ->
+                val diff = ChronoUnit.DAYS.between(ref, date)
+                when {
+                    diff < -180 -> date.plusYears(1)
+                    diff > 180 -> date.minusYears(1)
+                    else -> date
+                }
+            }
         }
+        return (numeric + named).filterNotNull().firstOrNull { it.isPlausibleFor(ref) }
     }
+
+    private fun LocalDate.isPlausibleFor(ref: LocalDate) = !isBefore(ref.minusDays(1)) && !isAfter(ref.plusDays(2))
 }

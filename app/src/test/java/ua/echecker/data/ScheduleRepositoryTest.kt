@@ -90,8 +90,8 @@ class ScheduleRepositoryTest {
 
     @Test fun `backfill pages back until posts are older than since`() = runTest {
         source.pages[null] = listOf(post(100, "11.11.2026", "з 10:00 до 12:00", daysAgo = 0))
-        source.pages[100] = listOf(post(90, "10.10.2026", "з 10:00 до 12:00", daysAgo = 40))
-        source.pages[90] = listOf(post(80, "01.10.2026", "з 10:00 до 12:00", daysAgo = 50))
+        source.pages[100] = listOf(post(90, "10.10.2026", "з 10:00 до 12:00", daysAgo = 32))
+        source.pages[90] = listOf(post(80, "01.10.2026", "з 10:00 до 12:00", daysAgo = 41))
         repo.backfill(since = now.minus(Duration.ofDays(30)))
         assertEquals(listOf<Long?>(null, 100), source.requests)
         assertEquals(2, repo.observeRange(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)).first().size)
@@ -99,8 +99,8 @@ class ScheduleRepositoryTest {
 
     @Test fun `observeRange returns schedules date descending`() = runTest {
         source.pages[null] = listOf(
-            post(1, "09.11.2026", "з 10:00 до 12:00"),
-            post(2, "10.11.2026", "з 10:00 до 12:00"),
+            post(1, "09.11.2026", "з 10:00 до 12:00", daysAgo = 2),
+            post(2, "10.11.2026", "з 10:00 до 12:00", daysAgo = 1),
             post(3, "11.11.2026", "з 10:00 до 12:00"),
         )
         repo.sync()
