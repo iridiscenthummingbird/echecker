@@ -7,7 +7,7 @@
   &nbsp;
   <img src="docs/screenshots/app_off.png" width="260" alt="App — power is off (queue 1.2)">
   &nbsp;
-  <img src="docs/screenshots/app_history.png" width="260" alt="App — schedule history">
+  <img src="docs/screenshots/app_history_off.png" width="260" alt="App — schedule history">
 </p>
 
 ---
@@ -37,6 +37,7 @@ The app on a Pixel 9 using the real schedule for 12.11. Queue **3.1** has power 
 | | Power is on (queue 3.1) | No power (queue 1.2) |
 |---|:---:|:---:|
 | **App** | <img src="docs/screenshots/app_on.png" width="260"> | <img src="docs/screenshots/app_off.png" width="260"> |
+| **History** | <img src="docs/screenshots/app_history_on.png" width="260"> | <img src="docs/screenshots/app_history_off.png" width="260"> |
 
 ### Widget
 
@@ -102,7 +103,7 @@ Requires JDK 17 and the Android SDK.
 | | Світло є (черга 3.1) | Світла немає (черга 1.2) |
 |---|:---:|:---:|
 | **Застосунок** | <img src="docs/screenshots/app_on.png" width="260"> | <img src="docs/screenshots/app_off.png" width="260"> |
-| **Історія** | | <img src="docs/screenshots/app_history.png" width="260"> |
+| **Історія** | <img src="docs/screenshots/app_history_on.png" width="260"> | <img src="docs/screenshots/app_history_off.png" width="260"> |
 
 ### Віджет
 
