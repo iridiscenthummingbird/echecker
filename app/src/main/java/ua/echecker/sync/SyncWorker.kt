@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import ua.echecker.container
+import ua.echecker.data.SyncIssue
 import ua.echecker.widget.WidgetUpdater
 import java.time.Duration
 import java.time.Instant
@@ -26,32 +27,64 @@ import java.util.concurrent.TimeUnit
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val c = applicationContext.container
+        val now = Instant.now()
+        val backfilled = c.settings.backfillDone.first()
+        val lastPrimary = c.settings.primarySyncedAt.first() ?: c.settings.lastSyncAt.first()
+        val lastBackupCheck = c.settings.backupCheckedAt.first()
         return try {
-            if (!c.settings.backfillDone.first()) {
-                c.repository.backfill(since = Instant.now().minus(Duration.ofDays(30)))
-                c.settings.markBackfillDone()
+            val result = c.repository.sync(
+                since = sinceFor(now, lastPrimary.takeIf { backfilled }),
+                now = now,
+                checkBackupsForGaps = lastBackupCheck == null || Duration.between(lastBackupCheck, now) >= BACKUP_GAP_INTERVAL,
+            )
+            if (result.backupsChecked) c.settings.markBackupChecked(now)
+            result.backupErrors.forEach { (id, e) -> Log.w(TAG, "Backup source $id failed", e) }
+            val primaryError = result.primaryError
+            if (primaryError == null) {
+                c.settings.markPrimarySynced(now)
+                if (!backfilled) c.settings.markBackfillDone()
+                c.settings.setSyncIssue(null)
             } else {
-                c.repository.sync()
+                Log.w(TAG, "Primary source failed; used backups ${result.backupsAnswered}", primaryError)
+                c.settings.setSyncIssue(SyncIssue.from(primaryError).copy(backupSource = result.backupsAnswered.first()))
             }
-            c.settings.markSynced(Instant.now())
-            try {
-                WidgetUpdater.refreshAll(applicationContext)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Widget update failed", e)
-            }
+            c.settings.markSynced(now)
+            refreshWidgets()
             Result.success()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "Sync failed (attempt $runAttemptCount)", e)
+            c.settings.setSyncIssue(SyncIssue.from(e))
             if (runAttemptCount < 3) Result.retry() else Result.failure()
+        }
+    }
+
+    private suspend fun refreshWidgets() {
+        try {
+            WidgetUpdater.refreshAll(applicationContext)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Widget update failed", e)
         }
     }
 
     companion object {
         const val TAG = "SyncWorker"
+        private val HISTORY: Duration = Duration.ofDays(30)
+        private val OVERLAP: Duration = Duration.ofHours(1)
+        /** Without a primary failure, ask backups about a missing today schedule at most this often (mobile data). */
+        val BACKUP_GAP_INTERVAL: Duration = Duration.ofHours(2)
+
+        /**
+         * How far back to page the primary source: to just before the last full read (posts may have been
+         * edited meanwhile), but never more than [HISTORY]; the first sync backfills all of [HISTORY].
+         */
+        fun sinceFor(now: Instant, lastPrimarySync: Instant?): Instant {
+            val floor = now.minus(HISTORY)
+            return lastPrimarySync?.minus(OVERLAP)?.let { maxOf(it, floor) } ?: floor
+        }
     }
 }
 

@@ -5,6 +5,12 @@
     <!-- In-app updates: notify about a new release and hand its APK to the system installer. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- The widget flips status exactly when an outage starts/ends (Doze-proof alarm). Granted at install:
+         USE_EXACT_ALARM on Android 13+, SCHEDULE_EXACT_ALARM on 12/12L. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
 
     <application
         android:name=".EcheckerApp"

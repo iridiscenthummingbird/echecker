@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import ua.echecker.data.ChannelFetcher
 import ua.echecker.data.ScheduleRepository
 import ua.echecker.data.SettingsStore
+import ua.echecker.data.WordPressSource
 import ua.echecker.data.db.AppDatabase
 import ua.echecker.sync.SyncScheduler
 import ua.echecker.update.UpdateChecker
@@ -17,7 +18,12 @@ class AppContainer(context: Context) {
     val settings = SettingsStore(context)
     private val db = AppDatabase.create(context)
     private val http = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).build()
-    val repository = ScheduleRepository(db.scheduleDao(), ChannelFetcher(http))
+    val repository = ScheduleRepository(
+        db.scheduleDao(),
+        primary = ChannelFetcher(http),
+        // Consulted only when zoe_alarm fails or leaves a gap; zoe_alarm data always wins over theirs.
+        backups = listOf(ChannelFetcher(http, ChannelFetcher.OBLENERGO_CHANNEL), WordPressSource(http)),
+    )
     val updateChecker = UpdateChecker(http)
 
     /** APK downloads can take a while on slow mobile data; no overall call timeout. */

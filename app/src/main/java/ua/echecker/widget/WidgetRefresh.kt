@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -64,14 +65,19 @@ object WidgetStateLoader {
 /**
  * Re-renders the widget from cache at the next status change, next midnight, or after [TICK]
  * (keeps the timeline's "now" marker roughly current), whichever is first.
+ *
+ * Status changes and midnight use an exact alarm that also fires in Doze, so the widget flips on time;
+ * the tick stays inexact to spare the battery.
  */
 object WidgetRefreshScheduler {
-    private val SLACK: Duration = Duration.ofSeconds(5)
+    private val SLACK: Duration = Duration.ofSeconds(2)
     private val TICK: Duration = Duration.ofMinutes(15)
-    /** No exact-alarm permission: the alarm may fire anywhere in this window (and later in Doze). */
+    /** Window for the inexact tick. */
     private const val WINDOW_MS = 10 * 60_000L
 
-    fun nextRefreshAt(status: PowerStatus, now: ZonedDateTime): Instant {
+    data class Plan(val at: Instant, val exact: Boolean)
+
+    fun plan(status: PowerStatus, now: ZonedDateTime): Plan {
         val nextMidnight = now.toLocalDate().plusDays(1).atStartOfDay(KyivTime.ZONE)
         val change = when (status) {
             is PowerStatus.On -> status.nextOffAt
@@ -79,20 +85,36 @@ object WidgetRefreshScheduler {
             else -> null
         }
         val event = listOfNotNull(change, nextMidnight).minOf { it.toInstant() }.plus(SLACK)
-        return minOf(event, now.toInstant().plus(TICK))
+        val tick = now.toInstant().plus(TICK)
+        return if (event <= tick) Plan(event, exact = true) else Plan(tick, exact = false)
     }
 
+    fun nextRefreshAt(status: PowerStatus, now: ZonedDateTime): Instant = plan(status, now).at
+
     fun scheduleNext(context: Context, status: PowerStatus, now: ZonedDateTime) {
-        val at = nextRefreshAt(status, now)
+        val plan = plan(status, now)
         val pi = PendingIntent.getBroadcast(
             context,
             0,
             Intent(context, WidgetRefreshReceiver::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        context.getSystemService(AlarmManager::class.java)
-            .setWindow(AlarmManager.RTC, at.toEpochMilli(), WINDOW_MS, pi)
+        val alarms = context.getSystemService(AlarmManager::class.java)
+        val at = plan.at.toEpochMilli()
+        when {
+            !plan.exact -> alarms.setWindow(AlarmManager.RTC, at, WINDOW_MS, pi)
+            canScheduleExact(alarms) -> try {
+                alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            } catch (e: SecurityException) {
+                // Permission revoked between the check and the call.
+                alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            }
+            else -> alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        }
     }
+
+    private fun canScheduleExact(alarms: AlarmManager): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarms.canScheduleExactAlarms()
 }
 
 class WidgetRefreshReceiver : BroadcastReceiver() {

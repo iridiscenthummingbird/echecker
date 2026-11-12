@@ -1,5 +1,6 @@
 package ua.echecker.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -7,15 +8,22 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 
-/** [date] is ISO yyyy-MM-dd (sorts lexicographically). [contentHash] detects in-place edits of the same post. */
+/**
+ * [date] is ISO yyyy-MM-dd (sorts lexicographically). [contentHash] detects in-place edits of the same post.
+ * [source] is the [ua.echecker.data.PostSource.id] the post came from; [postId] is only comparable within one source.
+ */
 @Entity(tableName = "schedules")
 data class ScheduleEntity(
     @PrimaryKey val date: String,
     val postId: Long,
     val contentHash: Int,
+    @ColumnInfo(defaultValue = DEFAULT_SOURCE) val source: String = DEFAULT_SOURCE,
 )
 
-data class ScheduleVersion(val postId: Long, val contentHash: Int)
+/** Rows written before v3 all came from the primary channel. */
+const val DEFAULT_SOURCE = "zoe_alarm"
+
+data class ScheduleVersion(val postId: Long, val contentHash: Int, val source: String)
 
 @Entity(
     tableName = "intervals",
