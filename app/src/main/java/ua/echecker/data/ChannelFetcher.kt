@@ -35,8 +35,11 @@ class ChannelFetcher(
     }
 
     companion object {
-        fun parseHtml(html: String): List<RawPost> =
-            Jsoup.parse(html).select("div.tgme_widget_message[data-post]").mapNotNull { msg ->
+        /** @throws IOException if the page has no channel messages at all (layout changed or not a channel page). */
+        fun parseHtml(html: String): List<RawPost> {
+            val messages = Jsoup.parse(html).select("div.tgme_widget_message[data-post]")
+            if (messages.isEmpty()) throw IOException("No channel messages found (page layout changed?)")
+            return messages.mapNotNull { msg ->
                 val id = msg.attr("data-post").substringAfterLast('/').toLongOrNull()
                     ?: return@mapNotNull null
                 val textEl = msg.selectFirst(".tgme_widget_message_text.js-message_text")
@@ -48,5 +51,6 @@ class ChannelFetcher(
                 textEl.select("br").forEach { it.replaceWith(TextNode("\n")) }
                 RawPost(id, publishedAt, textEl.wholeText())
             }.sortedBy { it.id }
+        }
     }
 }

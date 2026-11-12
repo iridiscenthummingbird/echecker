@@ -1,11 +1,13 @@
 package ua.echecker.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ua.echecker.domain.Interval
 import ua.echecker.domain.Queue
 import ua.echecker.domain.ScheduleParser
+import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
 
@@ -35,5 +37,10 @@ class ChannelFetcherTest {
         val s = ScheduleParser.parse(posts[1].text, java.time.LocalDate.of(2026, 11, 9))!!
         assertEquals(LocalDate.of(2026, 11, 9), s.date)
         assertEquals(listOf(Interval(1140, 1440)), s.intervalsFor(Queue(1, 2)))
+    }
+
+    @Test fun `page without any channel messages is an error`() {
+        val page = "<html><body><div class=\"tgme_page\">Something else</div></body></html>"
+        assertThrows(IOException::class.java) { ChannelFetcher.parseHtml(page) }
     }
 }
