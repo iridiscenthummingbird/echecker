@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- lightning bolt, kept inside the 66dp safe zone -->
+    <path
+        android:fillColor="#F5B000"
+        android:pathData="M59,26L38,58H52L47,82L70,48H56Z" />
+    <!-- lighter left facet for a bit of depth -->
+    <path
+        android:fillColor="#FFD25C"
+        android:pathData="M59,26L38,58H52L56,48Z" />
+</vector>
