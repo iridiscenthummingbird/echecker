@@ -47,16 +47,17 @@ OkHttp, Jsoup. Сервера немає.
 | `ScheduleParser` | Чиста функція `parse(text): Schedule?`; `Schedule(date: LocalDate, queues: Map<Queue, List<Interval>>)`; `null` якщо пост не графік | — |
 | `ScheduleRepository` | Зберігання в Room; для кожної дати лишається графік з найбільшим `postId`; `Flow` графіка за датою та за діапазоном дат; час останнього успішного синку | Room, Fetcher, Parser |
 | `PowerStatusCalculator` | Чиста функція `(today: Schedule?, tomorrow: Schedule?, queue, now: ZonedDateTime) → PowerStatus` | — |
-| `SettingsStore` | Обрана черга | DataStore |
+| `SettingsStore` | Обрана черга, час останнього успішного синку, прапорець «backfill виконано» | DataStore |
 | `SyncWorker` | fetch → parse → save → `PowerWidget.updateAll()`; режим backfill | Repository |
-| `PowerWidget` | Glance-віджет 2×1, тап відкриває застосунок | Calculator, Repository, Settings |
+| `StatusFormatter` | Чиста функція `PowerStatus → StatusText(title, subtitle, staleNote)` — тексти віджета | — |
+| `PowerWidget` | Glance-віджет 2×1, тап відкриває застосунок | Calculator, Formatter, Repository, Settings |
 | `MainScreen` (Compose) | Вибір черги, Сьогодні, Завтра, Історія, «Оновити» | Repository, Settings |
 
 ### Моделі
 
 - `Queue(group: Int, sub: Int)` — 1..6 × 1..2, відображення `"N.M"`.
-- `Interval(start: LocalTime, endMinuteOfDay: Int)` — кінець як хвилина доби (0..1440),
-  щоб коректно представити `24:00`.
+- `Interval(startMinute: Int, endMinute: Int)` — хвилини доби (0..1440), щоб коректно
+  представити `24:00`.
 - `PowerStatus`:
   - `On(nextOffAt: ZonedDateTime?)` — `null` = відключень далі не заплановано;
   - `Off(nextOnAt: ZonedDateTime)`;
@@ -66,14 +67,14 @@ OkHttp, Jsoup. Сервера немає.
 
 ## Потік даних
 
-1. **Перший запуск:** вибір черги → one-time `SyncWorker` у режимі backfill: гортати
+1. **Перший запуск:** перший прогін `SyncWorker` (поки прапорець backfill не встановлено) робить backfill: гортати
    `?before=` назад, доки дата постів не стане старшою за 30 днів, максимум 20 сторінок.
 2. **Періодичний синк:** `SyncWorker` кожні 30 хв (constraint: мережа) завантажує першу
    сторінку, парсить, upsert-ить у Room, оновлює віджет. Помилка → `Result.retry()`
    з експоненційним backoff; кеш не змінюється.
 3. **Віджет:** читає графіки на сьогодні/завтра + чергу, рахує статус, рендерить.
    Після рендера ставить неточний `AlarmManager`-будильник на момент наступної зміни
-   статусу, який викликає перерендер з кешу (без мережі).
+   статусу або на найближчу північ (що раніше), який викликає перерендер з кешу (без мережі).
 4. **UI:** підписка на `Flow` з Room; «Оновити» → one-time `SyncWorker`.
 
 ## Парсинг
