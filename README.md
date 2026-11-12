@@ -1,6 +1,6 @@
 # Чи є світло · echecker
 
-**[English](#english) · [Українська](#українська)**
+**[English](#english) · [Українська](#українська)** · **[⬇ APK](https://github.com/iridiscenthummingbird/echecker/releases/latest/download/echecker.apk)**
 
 <p align="center">
   <img src="docs/screenshots/app_on.png" width="260" alt="App — power is on (queue 3.1)">
@@ -29,6 +29,16 @@ Schedules come from the public Telegram channel [t.me/zoe_alarm](https://t.me/zo
 preview, so you don't need a Telegram account, an API key or a server. Data refreshes in the background every 30 minutes,
 whenever the app is opened, and when you tap **Оновити** (Refresh). Everything is cached locally, so the app and the
 widget also work offline.
+
+### Download
+
+**[⬇ Download the latest APK](https://github.com/iridiscenthummingbird/echecker/releases/latest/download/echecker.apk)** · [all releases](https://github.com/iridiscenthummingbird/echecker/releases)
+
+Open the file on your phone and allow installs from this source when Android asks. Android 8.0 or newer is required.
+To update, install the new APK over the old one. Your queue and history are kept.
+
+> If you installed an earlier build that was not from Releases, uninstall it first. It was signed with a different key,
+> so Android will refuse to install the new APK over it.
 
 ### Screenshots
 
@@ -95,6 +105,16 @@ Requires JDK 17 and the Android SDK.
 публічну веб-версію, тому не потрібні ні акаунт у Telegram, ні API-ключ, ні сервер. Дані оновлюються у фоні кожні
 30 хвилин, щоразу під час відкриття застосунку і після натискання кнопки **Оновити**. Усе зберігається локально, тож
 застосунок і віджет працюють навіть без інтернету.
+
+### Завантажити
+
+**[⬇ Завантажити останній APK](https://github.com/iridiscenthummingbird/echecker/releases/latest/download/echecker.apk)** · [усі релізи](https://github.com/iridiscenthummingbird/echecker/releases)
+
+Відкрийте файл на телефоні та дозвольте встановлення з цього джерела, коли Android запитає. Потрібен Android 8.0 або новіший.
+Щоб оновитися, встановіть новий APK поверх старого. Черга та історія збережуться.
+
+> Якщо у вас стоїть старіша збірка не з Releases, спершу видаліть її. Вона підписана іншим ключем, тому Android
+> не дасть встановити новий APK поверх неї.
 
 ### Скріншоти
 
