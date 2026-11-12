@@ -35,7 +35,34 @@ class SettingsStore(private val context: Context) {
     private val ISSUE_HTTP = intPreferencesKey("sync_issue_http")
     private val ISSUE_BACKUP = stringPreferencesKey("sync_issue_backup")
 
+    private val ALERT_LEAD = intPreferencesKey("alert_lead_minutes")
+    private val ALERT_BACK_ON = booleanPreferencesKey("alert_back_on")
+    private val ALERT_SCHEDULE = booleanPreferencesKey("alert_schedule_changes")
+    private val LAST_ALERT = stringPreferencesKey("last_alert_key")
+
     val queue: Flow<Queue?> = context.dataStore.data.map { p -> p[QUEUE]?.let(Queue::parse) }
+
+    /** What to notify about; defaults are on so the feature is discoverable, each can be turned off in the app. */
+    val alertPrefs: Flow<AlertPrefs> = context.dataStore.data.map { p ->
+        AlertPrefs(
+            leadMinutes = p[ALERT_LEAD] ?: AlertPrefs.DEFAULT_LEAD,
+            backOn = p[ALERT_BACK_ON] ?: true,
+            scheduleChanges = p[ALERT_SCHEDULE] ?: true,
+        )
+    }
+    val lastAlertKey: Flow<String?> = context.dataStore.data.map { p -> p[LAST_ALERT] }
+
+    suspend fun setAlertPrefs(prefs: AlertPrefs) {
+        context.dataStore.edit {
+            it[ALERT_LEAD] = prefs.leadMinutes
+            it[ALERT_BACK_ON] = prefs.backOn
+            it[ALERT_SCHEDULE] = prefs.scheduleChanges
+        }
+    }
+
+    suspend fun markAlertShown(key: String) {
+        context.dataStore.edit { it[LAST_ALERT] = key }
+    }
     val lastSyncAt: Flow<Instant?> = context.dataStore.data.map { p -> p[LAST_SYNC]?.let(Instant::ofEpochMilli) }
     val backfillDone: Flow<Boolean> = context.dataStore.data.map { p -> p[BACKFILL_DONE] ?: false }
 

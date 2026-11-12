@@ -45,26 +45,38 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import androidx.glance.appwidget.state.getAppWidgetState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import ua.echecker.MainActivity
 import ua.echecker.R
+import ua.echecker.container
 import ua.echecker.domain.PowerStatus
+import ua.echecker.domain.Queue
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 
-class PowerWidget : GlanceAppWidget() {
+/** Status widget; subclasses decide which queue it shows. */
+abstract class StatusWidget : GlanceAppWidget() {
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** The queue to show, given this widget instance's Glance state. */
+    protected abstract suspend fun queueOf(context: Context, prefs: Preferences): Queue?
+
+    /** Label the widget with its queue. */
+    protected open val showQueue: Boolean = false
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val initial = WidgetStateLoader.load(context)
+        val initialPrefs = getAppWidgetState<Preferences>(context, PreferencesGlanceStateDefinition, id)
+        val initial = WidgetStateLoader.load(context, queueOf(context, initialPrefs), showQueue)
         provideContent {
             // A running Glance session only recomposes on update(); bumping REFRESH_NONCE re-runs the loader.
-            val nonce = currentState<Preferences>()[REFRESH_NONCE]
-            val state by produceState(initialValue = initial, nonce) {
+            val prefs = currentState<Preferences>()
+            val state by produceState(initialValue = initial, prefs[REFRESH_NONCE], prefs[WIDGET_QUEUE]) {
                 value = try {
-                    WidgetStateLoader.load(context)
+                    WidgetStateLoader.load(context, queueOf(context, prefs), showQueue)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -77,12 +89,27 @@ class PowerWidget : GlanceAppWidget() {
     }
 
     private companion object {
-        const val TAG = "PowerWidget"
+        const val TAG = "StatusWidget"
     }
+}
+
+/** Follows the queue selected in the app. */
+class PowerWidget : StatusWidget() {
+    override suspend fun queueOf(context: Context, prefs: Preferences): Queue? = context.container.settings.queue.first()
+}
+
+/** Shows a queue of its own, picked in [QueueWidgetConfigActivity] (e.g. parents' or work address). */
+class QueueWidget : StatusWidget() {
+    override val showQueue = true
+    override suspend fun queueOf(context: Context, prefs: Preferences): Queue? = prefs[WIDGET_QUEUE]?.let(Queue::parse)
 }
 
 class PowerWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = PowerWidget()
+}
+
+class QueueWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = QueueWidget()
 }
 
 // Same palette as the app's hero card (ui/theme/Theme.kt).
@@ -151,10 +178,12 @@ private fun WidgetContent(state: WidgetState) {
             }
             Column {
                 if (tall) {
-                    Text("ЗАРАЗ", style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold, color = muted))
+                    val label = listOfNotNull("ЗАРАЗ", state.queueLabel?.uppercase()).joinToString(" · ")
+                    Text(label, style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold, color = muted), maxLines = 1)
                 }
                 Text(
-                    s.title,
+                    // Short widgets have no label row: show a pinned queue next to the status instead.
+                    if (!tall && state.queue != null) "${s.title} · ${state.queue}" else s.title,
                     style = TextStyle(fontSize = if (tall) 21.sp else 17.sp, fontWeight = FontWeight.Bold, color = fg),
                     maxLines = 1,
                 )

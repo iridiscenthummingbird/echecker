@@ -8,11 +8,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import ua.echecker.notify.Notifications
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.echecker.sync.SyncScheduler
@@ -22,22 +23,34 @@ import ua.echecker.ui.theme.EcheckerTheme
 import ua.echecker.update.Updates
 
 class MainActivity : ComponentActivity() {
-    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val vm: MainViewModel by viewModels()
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { vm.onResume() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             EcheckerTheme {
-                val vm: MainViewModel = viewModel()
                 val state by vm.state.collectAsStateWithLifecycle()
-                MainScreen(state, vm::selectQueue, vm::refresh, vm::installUpdate)
+                MainScreen(
+                    state = state,
+                    onSelectQueue = vm::selectQueue,
+                    onRefresh = vm::refresh,
+                    onInstallUpdate = vm::installUpdate,
+                    onAlertPrefs = vm::setAlertPrefs,
+                    onAllowNotifications = { startActivity(Notifications.settingsIntent(this)) },
+                )
             }
         }
         askForNotificationsOnce()
     }
 
-    /** Update alerts need POST_NOTIFICATIONS on Android 13+; ask a single time, never nag. */
+    override fun onResume() {
+        super.onResume()
+        vm.onResume()
+    }
+
+    /** Outage and update alerts need POST_NOTIFICATIONS on Android 13+; ask a single time, never nag. */
     private fun askForNotificationsOnce() {
         if (Build.VERSION.SDK_INT < 33) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return

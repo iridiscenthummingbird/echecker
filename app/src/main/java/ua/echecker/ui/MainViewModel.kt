@@ -22,7 +22,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ua.echecker.container
+import ua.echecker.data.AlertPrefs
 import ua.echecker.data.SyncIssue
+import ua.echecker.domain.HistoryStats
+import ua.echecker.notify.Notifications
+import ua.echecker.notify.OutageAlertScheduler
 import ua.echecker.domain.Interval
 import ua.echecker.domain.KyivTime
 import ua.echecker.domain.PowerStatus
@@ -69,6 +73,10 @@ data class MainUiState(
     val update: UpdateUi? = null,
     /** Why the last sync failed or fell back to a backup source; null after a clean sync. */
     val syncIssue: SyncIssue? = null,
+    val historyStats: HistoryStats? = null,
+    val alertPrefs: AlertPrefs = AlertPrefs(),
+    /** POST_NOTIFICATIONS granted and notifications enabled for the app. */
+    val notificationsAllowed: Boolean = true,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -118,6 +126,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             today = byDate[today]?.forQueue(),
             tomorrow = byDate[today.plusDays(1)]?.forQueue(),
             history = schedules.filter { it.date < today }.map { it.forQueue() },
+            historyStats = if (queue == null) null else HistoryStats.compute(
+                schedules.filter { it.date < today }.associate { it.date to it.intervalsFor(queue) }, today,
+            ),
             lastSyncAt = lastSync,
             refreshing = refreshing,
             nowMinute = now.hour * 60 + now.minute,
@@ -126,17 +137,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    private val notificationsAllowed = MutableStateFlow(Notifications.canNotify(app))
+
     val state: StateFlow<MainUiState> = combine(
-        scheduleState, Updates.available(app), updatePhase, c.settings.syncIssue,
-    ) { s, release, phase, issue ->
-        s.copy(update = release?.let { UpdateUi(it.version, phase) }, syncIssue = issue)
+        scheduleState,
+        combine(Updates.available(app), updatePhase) { release, phase -> release?.let { UpdateUi(it.version, phase) } },
+        c.settings.syncIssue,
+        c.settings.alertPrefs,
+        notificationsAllowed,
+    ) { s, update, issue, prefs, allowed ->
+        s.copy(update = update, syncIssue = issue, alertPrefs = prefs, notificationsAllowed = allowed)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
 
     fun selectQueue(q: Queue) {
         viewModelScope.launch {
             c.settings.setQueue(q)
             WidgetUpdater.refreshAll(getApplication())
+            OutageAlertScheduler.reschedule(getApplication())
         }
+    }
+
+    fun setAlertPrefs(prefs: AlertPrefs) {
+        viewModelScope.launch {
+            c.settings.setAlertPrefs(prefs)
+            OutageAlertScheduler.reschedule(getApplication())
+        }
+    }
+
+    /** On return to the app: the user may have just allowed (or blocked) notifications in system settings. */
+    fun onResume() {
+        notificationsAllowed.value = Notifications.canNotify(getApplication())
+        viewModelScope.launch { OutageAlertScheduler.reschedule(getApplication()) }
     }
 
     fun refresh() {

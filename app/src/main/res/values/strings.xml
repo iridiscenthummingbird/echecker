@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">Чи є світло</string>
     <string name="widget_description">Статус світла для вашої черги</string>
+    <string name="queue_widget_label">Світло: інша черга</string>
+    <string name="queue_widget_description">Статус світла для черги, яку ви оберете (батьки, робота)</string>
 </resources>

@@ -43,7 +43,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
+import ua.echecker.data.AlertPrefs
 import ua.echecker.data.SyncIssue
+import ua.echecker.domain.HistoryStats
+import ua.echecker.domain.PeriodStats
+import ua.echecker.domain.formatDuration
 import ua.echecker.domain.Interval
 import ua.echecker.domain.KyivTime
 import ua.echecker.domain.PowerStatus
@@ -68,6 +74,8 @@ fun MainScreen(
     onSelectQueue: (Queue) -> Unit,
     onRefresh: () -> Unit,
     onInstallUpdate: () -> Unit = {},
+    onAlertPrefs: (AlertPrefs) -> Unit = {},
+    onAllowNotifications: () -> Unit = {},
 ) {
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(
@@ -81,7 +89,7 @@ fun MainScreen(
             if (state.queue != null) {
                 item { StatusHero(state.status, state.statusText, state.today?.intervals, state.nowMinute) }
             }
-            item { QueuePicker(state.queue, onSelectQueue) }
+            item { QueuePicker(state.queue, onSelect = onSelectQueue) }
             if (state.queue == null) {
                 item {
                     Text(
@@ -96,10 +104,13 @@ fun MainScreen(
             item { DayCard("Сьогодні", state.today, todayEmpty, nowMinute = state.nowMinute) }
             item { DayCard("Завтра", state.tomorrow, "Графік ще не опубліковано", nowMinute = null) }
             item { SyncRow(state.lastSyncAt, state.refreshing, state.syncIssue, onRefresh) }
+            item { SectionTitle("Сповіщення", Modifier.padding(top = 6.dp, start = 4.dp)) }
+            item { NotificationsCard(state.alertPrefs, state.notificationsAllowed, onAlertPrefs, onAllowNotifications) }
             item { SectionTitle("Історія", Modifier.padding(top = 6.dp, start = 4.dp)) }
             if (state.history.isEmpty()) {
                 item { Text("Історія поки порожня", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             } else {
+                state.historyStats?.takeIf { it.month.days > 0 }?.let { stats -> item { StatsCard(stats) } }
                 item { HistoryCard(state.history) }
             }
         }
@@ -294,7 +305,7 @@ private fun StatusHero(status: PowerStatus, text: StatusText?, today: List<Inter
 // ---- Queue picker ----
 
 @Composable
-private fun QueuePicker(selected: Queue?, onSelect: (Queue) -> Unit) {
+internal fun QueuePicker(selected: Queue?, title: String = "Ваша черга", onSelect: (Queue) -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -302,7 +313,7 @@ private fun QueuePicker(selected: Queue?, onSelect: (Queue) -> Unit) {
             .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp),
     ) {
-        SectionTitle("Ваша черга")
+        SectionTitle(title)
         Spacer(Modifier.height(12.dp))
         Queue.ALL.chunked(6).forEachIndexed { i, row ->
             if (i > 0) Spacer(Modifier.height(8.dp))
@@ -341,6 +352,168 @@ private fun QueuePill(q: Queue, selected: Boolean, onClick: () -> Unit, modifier
         )
     }
 }
+
+@Composable
+private fun ChoicePill(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        modifier
+            .height(40.dp)
+            .clip(shape)
+            .then(
+                if (selected) {
+                    Modifier.background(Brush.verticalGradient(Power.colors.heroOn))
+                } else {
+                    Modifier
+                        .background(cs.surfaceVariant.copy(alpha = 0.6f))
+                        .border(1.dp, cs.outlineVariant, shape)
+                },
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
+            color = if (selected) Power.colors.onHeroOn else cs.onSurface,
+        )
+    }
+}
+
+// ---- Notifications ----
+
+@Composable
+private fun NotificationsCard(
+    prefs: AlertPrefs,
+    allowed: Boolean,
+    onChange: (AlertPrefs) -> Unit,
+    onAllow: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(cs.surface)
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (!allowed) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "⚠ Сповіщення вимкнені для застосунку",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.error,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onAllow) { Text("Дозволити", fontWeight = FontWeight.SemiBold) }
+            }
+        }
+        Text("Перед відключенням", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (minutes in AlertPrefs.LEAD_CHOICES) {
+                ChoicePill(
+                    label = if (minutes == 0) "Вимк" else formatDuration(minutes),
+                    selected = prefs.leadMinutes == minutes,
+                    onClick = { onChange(prefs.copy(leadMinutes = minutes)) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        SwitchRow("Коли світло має повернутися", prefs.backOn) { onChange(prefs.copy(backOn = it)) }
+        SwitchRow("Опубліковано або змінено графік", prefs.scheduleChanges) { onChange(prefs.copy(scheduleChanges = it)) }
+    }
+}
+
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onChange(!checked) },
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+// ---- History stats ----
+
+@Composable
+private fun StatsCard(stats: HistoryStats) {
+    val cs = MaterialTheme.colorScheme
+    val pc = Power.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(cs.surface)
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatTile("7 днів", stats.week, Modifier.weight(1f))
+            StatTile("30 днів", stats.month, Modifier.weight(1f))
+        }
+        if (stats.daily.size >= 2) {
+            val maxMinutes = 24 * 60f
+            val barColor = pc.off
+            val track = cs.surfaceVariant
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+            ) {
+                val n = stats.daily.size
+                val gap = 4.dp.toPx()
+                val w = (size.width - gap * (n - 1)) / n
+                stats.daily.forEachIndexed { i, (_, minutes) ->
+                    val x = i * (w + gap)
+                    drawRoundRect(track, Offset(x, 0f), Size(w, size.height), CornerRadius(3.dp.toPx()))
+                    val h = size.height * (minutes / maxMinutes).coerceIn(0f, 1f)
+                    if (h > 0f) {
+                        drawRoundRect(barColor, Offset(x, size.height - h), Size(w, h), CornerRadius(3.dp.toPx()))
+                    }
+                }
+            }
+            Row {
+                Text(SHORT_DAY.format(stats.daily.first().first), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                Text("годин без світла на день", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                Text(SHORT_DAY.format(stats.daily.last().first), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatTile(title: String, period: PeriodStats, modifier: Modifier) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(cs.surfaceVariant.copy(alpha = 0.6f))
+            .padding(12.dp),
+    ) {
+        Text(title.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
+        Text(
+            formatDuration(period.offMinutes),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Text(
+            if (period.days == 0) "немає даних" else "≈ ${formatDuration(period.avgMinutesPerDay)} на день",
+            style = MaterialTheme.typography.bodySmall,
+            color = cs.onSurfaceVariant,
+        )
+    }
+}
+
+private val SHORT_DAY = DateTimeFormatter.ofPattern("dd.MM")
 
 // ---- Day cards ----
 

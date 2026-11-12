@@ -1,28 +1,20 @@
 package ua.echecker.update
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import ua.echecker.MainActivity
 import ua.echecker.R
+import ua.echecker.notify.Notifications
 
 object UpdateNotifier {
     private const val CHANNEL = "app-updates"
     private const val ID = 1001
 
-    fun canNotify(context: Context): Boolean {
-        val granted = Build.VERSION.SDK_INT < 33 ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        return granted && NotificationManagerCompat.from(context).areNotificationsEnabled()
-    }
+    fun canNotify(context: Context): Boolean = Notifications.canNotify(context)
 
     /** @return true if the notification was posted. */
     fun show(context: Context, release: ReleaseInfo): Boolean {
