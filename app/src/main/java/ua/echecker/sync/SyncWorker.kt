@@ -35,7 +35,13 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 c.repository.sync()
             }
             c.settings.markSynced(Instant.now())
-            PowerWidget().updateAll(applicationContext)
+            try {
+                PowerWidget().updateAll(applicationContext)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Widget update failed", e)
+            }
             Result.success()
         } catch (e: CancellationException) {
             throw e
@@ -72,6 +78,6 @@ object SyncScheduler {
 
     fun observeSyncNowRunning(context: Context): Flow<Boolean> =
         WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(NOW).map { infos ->
-            infos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+            infos.any { it.state == WorkInfo.State.RUNNING }
         }
 }
