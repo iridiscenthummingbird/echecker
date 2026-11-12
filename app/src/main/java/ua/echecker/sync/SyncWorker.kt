@@ -2,7 +2,6 @@ package ua.echecker.sync
 
 import android.content.Context
 import android.util.Log
-import androidx.glance.appwidget.updateAll
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -19,7 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import ua.echecker.container
-import ua.echecker.widget.PowerWidget
+import ua.echecker.widget.WidgetUpdater
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -36,7 +35,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             }
             c.settings.markSynced(Instant.now())
             try {
-                PowerWidget().updateAll(applicationContext)
+                WidgetUpdater.refreshAll(applicationContext)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

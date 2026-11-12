@@ -1,7 +1,6 @@
 package ua.echecker.ui
 
 import android.app.Application
-import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,7 +14,7 @@ import ua.echecker.domain.KyivTime
 import ua.echecker.domain.Queue
 import ua.echecker.domain.Schedule
 import ua.echecker.sync.SyncScheduler
-import ua.echecker.widget.PowerWidget
+import ua.echecker.widget.WidgetUpdater
 import java.time.Instant
 import java.time.LocalDate
 
@@ -55,7 +54,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun selectQueue(q: Queue) {
         viewModelScope.launch {
             c.settings.setQueue(q)
-            PowerWidget().updateAll(getApplication())
+            WidgetUpdater.refreshAll(getApplication())
         }
     }
 

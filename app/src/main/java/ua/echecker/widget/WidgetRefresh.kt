@@ -6,7 +6,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +69,7 @@ class WidgetRefreshReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                PowerWidget().updateAll(context)
+                WidgetUpdater.refreshAll(context)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
