@@ -121,26 +121,48 @@ class AlertsAndStatsTest {
 
     // ---- history stats ----
 
-    @Test fun `weekly and monthly totals count known days only`() {
-        val history = mapOf(
-            today.minusDays(1) to listOf(Interval(t(10), t(15))),          // 5 h
-            today.minusDays(3) to listOf(Interval(t(0), t(4)), Interval(t(20), t(22, 30))), // 6.5 h
-            today.minusDays(10) to listOf(Interval(t(0), t(10))),          // 10 h, outside the week
-            today.minusDays(40) to listOf(Interval(t(0), t(10))),          // outside the month
-        )
-        val s = HistoryStats.compute(history, today)
-        assertEquals(PeriodStats(2, t(11, 30)), s.week)
-        assertEquals(t(5, 45), s.week.avgMinutesPerDay)
-        assertEquals(PeriodStats(3, t(21, 30)), s.month)
-        assertEquals(
-            listOf(today.minusDays(10) to t(10), today.minusDays(3) to t(6, 30), today.minusDays(1) to t(5)),
-            s.daily,
-        )
+    private val history = mapOf(
+        today.minusDays(1) to listOf(Interval(t(10), t(15))),                           // 5 h
+        today.minusDays(3) to listOf(Interval(t(0), t(4)), Interval(t(20), t(22, 30))), // 6.5 h
+        today.minusDays(10) to listOf(Interval(t(0), t(10))),                           // 10 h, outside the week
+        today.minusDays(40) to listOf(Interval(t(0), t(10))),                           // outside the month
+    )
+
+    @Test fun `days without a published schedule count as days without outages`() {
+        // History covers far more than a month: both periods are full; unpublished days add 0 h but still count.
+        val s = HistoryStats.compute(history, today, historyStart = today.minusDays(60))
+        assertEquals(PeriodStats(days = 7, offMinutes = t(11, 30), daysWithoutSchedule = 5), s.week)
+        assertEquals(t(1, 39), s.week.avgMinutesPerDay)   // 11.5 h / 7, not / 2
+        assertEquals(PeriodStats(days = 30, offMinutes = t(21, 30), daysWithoutSchedule = 27), s.month)
+        assertEquals(43, s.month.avgMinutesPerDay)         // 21.5 h / 30
     }
 
-    @Test fun `durations`() {
+    @Test fun `periods are cut to the start of the app's history`() {
+        // History starts 12 days ago: the month has only 12 covered days.
+        val s = HistoryStats.compute(history, today, historyStart = today.minusDays(12))
+        assertEquals(PeriodStats(days = 12, offMinutes = t(21, 30), daysWithoutSchedule = 9), s.month)
+        // Without an explicit start, history begins at its earliest known day (40 days ago).
+        assertEquals(30, HistoryStats.compute(history, today).month.days)
+    }
+
+    @Test fun `chart has every covered day, unpublished ones empty`() {
+        val s = HistoryStats.compute(history, today, historyStart = today.minusDays(4))
+        assertEquals(
+            listOf(
+                DayBar(today.minusDays(4), 0, false),
+                DayBar(today.minusDays(3), t(6, 30), true),
+                DayBar(today.minusDays(2), 0, false),
+                DayBar(today.minusDays(1), t(5), true),
+            ),
+            s.daily,
+        )
+        assertEquals(HistoryStats.CHART_DAYS, HistoryStats.compute(history, today, today.minusDays(60)).daily.size)
+    }
+
+    @Test fun `durations and day counts`() {
         assertEquals("45 хв", formatDuration(45))
         assertEquals("5 год", formatDuration(300))
         assertEquals("5 год 30 хв", formatDuration(330))
+        assertEquals(listOf("1 день", "3 дні", "7 днів", "11 днів", "21 день", "30 днів"), listOf(1, 3, 7, 11, 21, 30).map(::formatDays))
     }
 }

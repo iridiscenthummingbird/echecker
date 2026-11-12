@@ -43,9 +43,10 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val today = KyivTime.dateOf(now)
         // The first sync (backfill) would report every day as "published"; only compare once we have a baseline.
         val before = if (queue != null && backfilled) snapshot(today) else null
+        val since = sinceFor(now, lastPrimary.takeIf { backfilled })
         return try {
             val result = c.repository.sync(
-                since = sinceFor(now, lastPrimary.takeIf { backfilled }),
+                since = since,
                 now = now,
                 checkBackupsForGaps = lastBackupCheck == null || Duration.between(lastBackupCheck, now) >= BACKUP_GAP_INTERVAL,
             )
@@ -54,7 +55,11 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             val primaryError = result.primaryError
             if (primaryError == null) {
                 c.settings.markPrimarySynced(now)
-                if (!backfilled) c.settings.markBackfillDone()
+                if (!backfilled) {
+                    c.settings.markBackfillDone()
+                    // The first full day the backfill read (its first, partial day may miss an early-morning post).
+                    c.settings.setHistoryStart(KyivTime.dateOf(since).plusDays(1))
+                }
                 c.settings.setSyncIssue(null)
             } else {
                 Log.w(TAG, "Primary source failed; used backups ${result.backupsAnswered}", primaryError)

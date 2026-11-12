@@ -109,12 +109,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val updatePhase = MutableStateFlow<UpdatePhase>(UpdatePhase.Idle)
 
     private val scheduleState: Flow<MainUiState> = combine(
-        c.settings.queue,
+        combine(c.settings.queue, c.settings.historyStart) { q, start -> q to start },
         schedules,
         c.settings.lastSyncAt,
         SyncScheduler.observeSyncNowRunning(app),
         now,
-    ) { queue, (today, schedules), lastSync, refreshing, now ->
+    ) { (queue, historyStart), (today, schedules), lastSync, refreshing, now ->
         fun Schedule.forQueue() = DaySchedule(date, queue?.let { intervalsFor(it) }.orEmpty())
         val byDate = schedules.associateBy { it.date }
         val status = PowerStatusCalculator.calculate(
@@ -127,7 +127,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             tomorrow = byDate[today.plusDays(1)]?.forQueue(),
             history = schedules.filter { it.date < today }.map { it.forQueue() },
             historyStats = if (queue == null) null else HistoryStats.compute(
-                schedules.filter { it.date < today }.associate { it.date to it.intervalsFor(queue) }, today,
+                schedules.filter { it.date < today }.associate { it.date to it.intervalsFor(queue) }, today, historyStart,
             ),
             lastSyncAt = lastSync,
             refreshing = refreshing,

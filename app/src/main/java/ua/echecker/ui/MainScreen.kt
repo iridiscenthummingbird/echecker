@@ -49,6 +49,7 @@ import ua.echecker.data.AlertPrefs
 import ua.echecker.data.SyncIssue
 import ua.echecker.domain.HistoryStats
 import ua.echecker.domain.PeriodStats
+import ua.echecker.domain.formatDays
 import ua.echecker.domain.formatDuration
 import ua.echecker.domain.Interval
 import ua.echecker.domain.KyivTime
@@ -455,13 +456,15 @@ private fun StatsCard(stats: HistoryStats) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatTile("7 днів", stats.week, Modifier.weight(1f))
-            StatTile("30 днів", stats.month, Modifier.weight(1f))
+            StatTile(stats.week, Modifier.weight(1f))
+            StatTile(stats.month, Modifier.weight(1f))
         }
         if (stats.daily.size >= 2) {
             val maxMinutes = 24 * 60f
             val barColor = pc.off
             val track = cs.surfaceVariant
+            // A day without a published schedule: an empty, fainter slot, so the gap stays visible.
+            val noSchedule = cs.surfaceVariant.copy(alpha = 0.35f)
             Canvas(
                 Modifier
                     .fillMaxWidth()
@@ -470,28 +473,35 @@ private fun StatsCard(stats: HistoryStats) {
                 val n = stats.daily.size
                 val gap = 4.dp.toPx()
                 val w = (size.width - gap * (n - 1)) / n
-                stats.daily.forEachIndexed { i, (_, minutes) ->
+                stats.daily.forEachIndexed { i, day ->
                     val x = i * (w + gap)
-                    drawRoundRect(track, Offset(x, 0f), Size(w, size.height), CornerRadius(3.dp.toPx()))
-                    val h = size.height * (minutes / maxMinutes).coerceIn(0f, 1f)
+                    drawRoundRect(if (day.hasSchedule) track else noSchedule, Offset(x, 0f), Size(w, size.height), CornerRadius(3.dp.toPx()))
+                    val h = size.height * (day.offMinutes / maxMinutes).coerceIn(0f, 1f)
                     if (h > 0f) {
                         drawRoundRect(barColor, Offset(x, size.height - h), Size(w, h), CornerRadius(3.dp.toPx()))
                     }
                 }
             }
             Row {
-                Text(SHORT_DAY.format(stats.daily.first().first), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Text(SHORT_DAY.format(stats.daily.first().date), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
                 Text("годин без світла на день", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
-                Text(SHORT_DAY.format(stats.daily.last().first), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Text(SHORT_DAY.format(stats.daily.last().date), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            }
+            if (stats.daily.any { !it.hasSchedule }) {
+                Text(
+                    "Бліді стовпчики — дні, на які графік не публікували (рахуються як 0 год).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cs.onSurfaceVariant,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun StatTile(title: String, period: PeriodStats, modifier: Modifier) {
+private fun StatTile(period: PeriodStats, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
     Column(
         modifier
@@ -499,7 +509,8 @@ private fun StatTile(title: String, period: PeriodStats, modifier: Modifier) {
             .background(cs.surfaceVariant.copy(alpha = 0.6f))
             .padding(12.dp),
     ) {
-        Text(title.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
+        // The real number of days: shorter than 7/30 when the app's history does not reach that far back.
+        Text(formatDays(period.days).uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
         Text(
             formatDuration(period.offMinutes),
             style = MaterialTheme.typography.titleLarge,
@@ -510,6 +521,13 @@ private fun StatTile(title: String, period: PeriodStats, modifier: Modifier) {
             style = MaterialTheme.typography.bodySmall,
             color = cs.onSurfaceVariant,
         )
+        if (period.daysWithoutSchedule > 0) {
+            Text(
+                "без графіка: ${formatDays(period.daysWithoutSchedule)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant,
+            )
+        }
     }
 }
 

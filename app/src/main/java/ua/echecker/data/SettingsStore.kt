@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.map
 import ua.echecker.domain.Queue
 import ua.echecker.update.ReleaseInfo
 import java.time.Instant
+import java.time.LocalDate
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
@@ -39,6 +40,17 @@ class SettingsStore(private val context: Context) {
     private val ALERT_BACK_ON = booleanPreferencesKey("alert_back_on")
     private val ALERT_SCHEDULE = booleanPreferencesKey("alert_schedule_changes")
     private val LAST_ALERT = stringPreferencesKey("last_alert_key")
+    /** First Kyiv day the backfill covered; days from here on without a schedule had no outages scheduled. */
+    private val HISTORY_START = stringPreferencesKey("history_start")
+
+    /** Null on installs that backfilled before this was recorded; callers fall back to the earliest stored day. */
+    val historyStart: Flow<LocalDate?> = context.dataStore.data.map { p ->
+        p[HISTORY_START]?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    }
+
+    suspend fun setHistoryStart(date: LocalDate) {
+        context.dataStore.edit { it[HISTORY_START] = date.toString() }
+    }
 
     val queue: Flow<Queue?> = context.dataStore.data.map { p -> p[QUEUE]?.let(Queue::parse) }
 
