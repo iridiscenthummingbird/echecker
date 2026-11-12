@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class ScheduleDao {
-    @Query("SELECT postId FROM schedules WHERE date = :date")
-    protected abstract suspend fun postIdFor(date: String): Long?
+    @Query("SELECT postId, contentHash FROM schedules WHERE date = :date")
+    protected abstract suspend fun versionFor(date: String): ScheduleVersion?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     protected abstract suspend fun insertSchedule(schedule: ScheduleEntity)
@@ -21,11 +21,14 @@ abstract class ScheduleDao {
     @Insert
     protected abstract suspend fun insertIntervals(intervals: List<IntervalEntity>)
 
-    /** Stores the schedule only if no schedule from a newer-or-equal post exists. */
+    /** Stores the schedule if it comes from a newer post, or from the same post with edited content. */
     @Transaction
     open suspend fun upsertIfNewer(schedule: ScheduleEntity, intervals: List<IntervalEntity>): Boolean {
-        val existing = postIdFor(schedule.date)
-        if (existing != null && existing >= schedule.postId) return false
+        val existing = versionFor(schedule.date)
+        val write = existing == null ||
+            schedule.postId > existing.postId ||
+            (schedule.postId == existing.postId && schedule.contentHash != existing.contentHash)
+        if (!write) return false
         deleteIntervals(schedule.date)
         insertSchedule(schedule)
         insertIntervals(intervals)

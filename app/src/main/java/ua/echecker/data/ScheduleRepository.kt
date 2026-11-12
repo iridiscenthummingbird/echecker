@@ -45,7 +45,7 @@ class ScheduleRepository(
             val schedule = ScheduleParser.parse(post.text, post.publishedAt.atZone(KyivTime.ZONE).toLocalDate()) ?: continue
             val date = schedule.date.toString()
             dao.upsertIfNewer(
-                ScheduleEntity(date, post.id),
+                ScheduleEntity(date, post.id, schedule.queues.toSortedMap().toString().hashCode()),
                 schedule.queues.flatMap { (queue, intervals) ->
                     intervals.map { IntervalEntity(date, queue.toString(), it.startMinute, it.endMinute) }
                 },

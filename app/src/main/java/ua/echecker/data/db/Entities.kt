@@ -7,12 +7,15 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 
-/** [date] is ISO yyyy-MM-dd (sorts lexicographically). */
+/** [date] is ISO yyyy-MM-dd (sorts lexicographically). [contentHash] detects in-place edits of the same post. */
 @Entity(tableName = "schedules")
 data class ScheduleEntity(
     @PrimaryKey val date: String,
     val postId: Long,
+    val contentHash: Int,
 )
+
+data class ScheduleVersion(val postId: Long, val contentHash: Int)
 
 @Entity(
     tableName = "intervals",

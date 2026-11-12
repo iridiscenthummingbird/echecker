@@ -64,6 +64,30 @@ class ScheduleRepositoryTest {
         assertEquals(listOf(Interval(1200, 1260)), repo.get(LocalDate.of(2026, 11, 11))!!.intervalsFor(q11))
     }
 
+    @Test fun `edited post with the same id replaces its schedule`() = runTest {
+        source.pages[null] = listOf(post(20, "11.11.2026", "з 10:00 до 12:00"))
+        repo.sync()
+        source.pages[null] = listOf(post(20, "11.11.2026", "з 14:00 до 16:00"))
+        repo.sync()
+        assertEquals(listOf(Interval(840, 960)), repo.get(LocalDate.of(2026, 11, 11))!!.intervalsFor(q11))
+    }
+
+    @Test fun `same post id with same content is a no-op`() = runTest {
+        source.pages[null] = listOf(post(20, "11.11.2026", "з 10:00 до 12:00"))
+        repo.sync()
+        source.pages[null] = listOf(post(20, "11.11.2026", "з 10:00 до 12:00"))
+        repo.sync()
+        assertEquals(listOf(Interval(600, 720)), repo.get(LocalDate.of(2026, 11, 11))!!.intervalsFor(q11))
+    }
+
+    @Test fun `older post id is still ignored even with different content`() = runTest {
+        source.pages[null] = listOf(post(20, "11.11.2026", "з 10:00 до 12:00"))
+        repo.sync()
+        source.pages[null] = listOf(post(19, "11.11.2026", "з 14:00 до 16:00"))
+        repo.sync()
+        assertEquals(listOf(Interval(600, 720)), repo.get(LocalDate.of(2026, 11, 11))!!.intervalsFor(q11))
+    }
+
     @Test fun `backfill pages back until posts are older than since`() = runTest {
         source.pages[null] = listOf(post(100, "11.11.2026", "з 10:00 до 12:00", daysAgo = 0))
         source.pages[100] = listOf(post(90, "10.10.2026", "з 10:00 до 12:00", daysAgo = 40))
