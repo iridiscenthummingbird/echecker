@@ -62,6 +62,11 @@ The app on a Pixel 9 using the real schedule for 12.11. Queue **3.1** has power 
 | **App** | <img src="docs/screenshots/app_on.png" width="260"> | <img src="docs/screenshots/app_off.png" width="260"> |
 | **History** | <img src="docs/screenshots/app_history_on.png" width="260"> | <img src="docs/screenshots/app_history_off.png" width="260"> |
 
+Notification settings and history stats (7 / 30 days, daily average, 14-day chart; faint bars are days with no
+published schedule):
+
+<p align="center"><img src="docs/screenshots/app_notifications_stats.png" width="260" alt="Notification settings and history stats"></p>
+
 ### Widget
 
 The widget can be resized, and its layout adapts to the size:
@@ -159,6 +164,11 @@ needs an English counterpart in `values-en/strings.xml` — a test checks it.
 |---|:---:|:---:|
 | **Застосунок** | <img src="docs/screenshots/app_on.png" width="260"> | <img src="docs/screenshots/app_off.png" width="260"> |
 | **Історія** | <img src="docs/screenshots/app_history_on.png" width="260"> | <img src="docs/screenshots/app_history_off.png" width="260"> |
+
+Налаштування сповіщень і статистика історії (7 / 30 днів, середнє на день, діаграма за 14 днів; бліді стовпчики —
+дні, на які графік не публікували):
+
+<p align="center"><img src="docs/screenshots/app_notifications_stats.png" width="260" alt="Налаштування сповіщень і статистика"></p>
 
 ### Віджет
 
