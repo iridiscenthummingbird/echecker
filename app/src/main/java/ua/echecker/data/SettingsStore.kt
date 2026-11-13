@@ -3,6 +3,7 @@ package ua.echecker.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -27,6 +28,13 @@ class SettingsStore(private val context: Context) {
     private val UPDATE_NOTIFIED = stringPreferencesKey("update_notified_version")
     private val NOTIFICATIONS_ASKED = booleanPreferencesKey("notifications_permission_asked")
 
+    /** Last time the primary source was read in full; incremental syncs page back to just before it. */
+    private val PRIMARY_SYNC = longPreferencesKey("primary_sync_at")
+    private val BACKUP_CHECK = longPreferencesKey("backup_check_at")
+    private val ISSUE_KIND = stringPreferencesKey("sync_issue_kind")
+    private val ISSUE_HTTP = intPreferencesKey("sync_issue_http")
+    private val ISSUE_BACKUP = stringPreferencesKey("sync_issue_backup")
+
     val queue: Flow<Queue?> = context.dataStore.data.map { p -> p[QUEUE]?.let(Queue::parse) }
     val lastSyncAt: Flow<Instant?> = context.dataStore.data.map { p -> p[LAST_SYNC]?.let(Instant::ofEpochMilli) }
     val backfillDone: Flow<Boolean> = context.dataStore.data.map { p -> p[BACKFILL_DONE] ?: false }
@@ -37,6 +45,34 @@ class SettingsStore(private val context: Context) {
 
     suspend fun markSynced(at: Instant) {
         context.dataStore.edit { it[LAST_SYNC] = at.toEpochMilli() }
+    }
+
+    val primarySyncedAt: Flow<Instant?> = context.dataStore.data.map { p -> p[PRIMARY_SYNC]?.let(Instant::ofEpochMilli) }
+    val backupCheckedAt: Flow<Instant?> = context.dataStore.data.map { p -> p[BACKUP_CHECK]?.let(Instant::ofEpochMilli) }
+
+    val syncIssue: Flow<SyncIssue?> = context.dataStore.data.map { p ->
+        val kind = p[ISSUE_KIND]?.let { k -> SyncIssue.Kind.entries.firstOrNull { it.name == k } } ?: return@map null
+        SyncIssue(kind, p[ISSUE_HTTP], p[ISSUE_BACKUP])
+    }
+
+    suspend fun markPrimarySynced(at: Instant) {
+        context.dataStore.edit { it[PRIMARY_SYNC] = at.toEpochMilli() }
+    }
+
+    suspend fun markBackupChecked(at: Instant) {
+        context.dataStore.edit { it[BACKUP_CHECK] = at.toEpochMilli() }
+    }
+
+    /** null clears the issue (after a fully successful sync). */
+    suspend fun setSyncIssue(issue: SyncIssue?) {
+        context.dataStore.edit {
+            it.remove(ISSUE_KIND); it.remove(ISSUE_HTTP); it.remove(ISSUE_BACKUP)
+            if (issue != null) {
+                it[ISSUE_KIND] = issue.kind.name
+                issue.httpCode?.let { c -> it[ISSUE_HTTP] = c }
+                issue.backupSource?.let { b -> it[ISSUE_BACKUP] = b }
+            }
+        }
     }
 
     suspend fun markBackfillDone() {

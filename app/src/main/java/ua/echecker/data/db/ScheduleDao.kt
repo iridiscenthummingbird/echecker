@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class ScheduleDao {
-    @Query("SELECT postId, contentHash FROM schedules WHERE date = :date")
+    @Query("SELECT postId, contentHash, source FROM schedules WHERE date = :date")
     protected abstract suspend fun versionFor(date: String): ScheduleVersion?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -21,14 +21,14 @@ abstract class ScheduleDao {
     @Insert
     protected abstract suspend fun insertIntervals(intervals: List<IntervalEntity>)
 
-    /** Stores the schedule if it comes from a newer post, or from the same post with edited content. */
+    /** Stores the schedule if [shouldReplace] accepts the version currently stored for its date (null = none). */
     @Transaction
-    open suspend fun upsertIfNewer(schedule: ScheduleEntity, intervals: List<IntervalEntity>): Boolean {
-        val existing = versionFor(schedule.date)
-        val write = existing == null ||
-            schedule.postId > existing.postId ||
-            (schedule.postId == existing.postId && schedule.contentHash != existing.contentHash)
-        if (!write) return false
+    open suspend fun upsertIf(
+        schedule: ScheduleEntity,
+        intervals: List<IntervalEntity>,
+        shouldReplace: (ScheduleVersion?) -> Boolean,
+    ): Boolean {
+        if (!shouldReplace(versionFor(schedule.date))) return false
         deleteIntervals(schedule.date)
         insertSchedule(schedule)
         insertIntervals(intervals)

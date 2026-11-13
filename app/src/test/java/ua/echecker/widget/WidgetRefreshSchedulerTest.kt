@@ -15,7 +15,7 @@ class WidgetRefreshSchedulerTest {
     @Test fun `status change sooner than the tick wins`() {
         val change = at(10, 7)
         assertEquals(
-            change.toInstant().plusSeconds(5),
+            change.toInstant().plusSeconds(2),
             WidgetRefreshScheduler.nextRefreshAt(PowerStatus.On(change), now),
         )
     }
@@ -31,8 +31,14 @@ class WidgetRefreshSchedulerTest {
         val lateNow = at(23, 55)
         val midnight = lateNow.toLocalDate().plusDays(1).atStartOfDay(KyivTime.ZONE)
         assertEquals(
-            midnight.toInstant().plusSeconds(5),
+            midnight.toInstant().plusSeconds(2),
             WidgetRefreshScheduler.nextRefreshAt(PowerStatus.On(null), lateNow),
         )
+    }
+
+    @Test fun `status change uses an exact alarm, the tick does not`() {
+        assertEquals(true, WidgetRefreshScheduler.plan(PowerStatus.On(at(10, 7)), now).exact)
+        assertEquals(false, WidgetRefreshScheduler.plan(PowerStatus.Off(at(17, 30)), now).exact)
+        assertEquals(false, WidgetRefreshScheduler.plan(PowerStatus.NoData, now).exact)
     }
 }

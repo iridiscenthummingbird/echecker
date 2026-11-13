@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ua.echecker.data.SyncIssue
 import ua.echecker.domain.Interval
 import ua.echecker.domain.KyivTime
 import ua.echecker.domain.PowerStatus
@@ -94,7 +95,7 @@ fun MainScreen(
             val todayEmpty = if (state.lastSyncAt == null) "Немає даних" else "Відключень не заплановано"
             item { DayCard("Сьогодні", state.today, todayEmpty, nowMinute = state.nowMinute) }
             item { DayCard("Завтра", state.tomorrow, "Графік ще не опубліковано", nowMinute = null) }
-            item { SyncRow(state.lastSyncAt, state.refreshing, onRefresh) }
+            item { SyncRow(state.lastSyncAt, state.refreshing, state.syncIssue, onRefresh) }
             item { SectionTitle("Історія", Modifier.padding(top = 6.dp, start = 4.dp)) }
             if (state.history.isEmpty()) {
                 item { Text("Історія поки порожня", color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -500,33 +501,49 @@ private fun HourLabels(color: Color) {
 // ---- Sync ----
 
 @Composable
-private fun SyncRow(lastSyncAt: Instant?, refreshing: Boolean, onRefresh: () -> Unit) {
+private fun SyncRow(lastSyncAt: Instant?, refreshing: Boolean, issue: SyncIssue?, onRefresh: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
-        Box(
-            Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(if (lastSyncAt != null) Color(0xFF3BB273) else cs.outline),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            lastSyncAt?.let { "Оновлено ${SYNC.format(it.atZone(KyivTime.ZONE))}" } ?: "Ще не оновлювалось",
-            style = MaterialTheme.typography.bodySmall,
-            color = cs.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
-        Button(
-            onClick = onRefresh,
-            enabled = !refreshing,
-            colors = ButtonDefaults.buttonColors(containerColor = cs.secondary, contentColor = cs.onSecondary),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
-        ) {
-            if (refreshing) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.onSecondary)
-                Spacer(Modifier.width(8.dp))
+    val dot = when {
+        issue?.isError == true -> cs.error
+        issue != null -> Color(0xFFE0A030)
+        lastSyncAt != null -> Color(0xFF3BB273)
+        else -> cs.outline
+    }
+    Column(Modifier.padding(horizontal = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(dot),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                lastSyncAt?.let { "Оновлено ${SYNC.format(it.atZone(KyivTime.ZONE))}" } ?: "Ще не оновлювалось",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = onRefresh,
+                enabled = !refreshing,
+                colors = ButtonDefaults.buttonColors(containerColor = cs.secondary, contentColor = cs.onSecondary),
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                if (refreshing) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.onSecondary)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text("↻  Оновити", fontWeight = FontWeight.SemiBold)
             }
-            Text("↻  Оновити", fontWeight = FontWeight.SemiBold)
+        }
+        if (issue != null && !refreshing) {
+            Text(
+                (if (issue.isError) "⚠ " else "ℹ ") + issue.message(),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (issue.isError) cs.error else cs.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
     }
 }

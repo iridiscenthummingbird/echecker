@@ -1,6 +1,9 @@
 package ua.echecker.ui
 
 import android.app.Application
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -19,6 +22,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ua.echecker.container
+import ua.echecker.data.SyncIssue
 import ua.echecker.domain.Interval
 import ua.echecker.domain.KyivTime
 import ua.echecker.domain.PowerStatus
@@ -63,6 +67,8 @@ data class MainUiState(
     val status: PowerStatus = PowerStatus.QueueNotSelected,
     val statusText: StatusText? = null,
     val update: UpdateUi? = null,
+    /** Why the last sync failed or fell back to a backup source; null after a clean sync. */
+    val syncIssue: SyncIssue? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -120,8 +126,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    val state: StateFlow<MainUiState> = combine(scheduleState, Updates.available(app), updatePhase) { s, release, phase ->
-        s.copy(update = release?.let { UpdateUi(it.version, phase) })
+    val state: StateFlow<MainUiState> = combine(
+        scheduleState, Updates.available(app), updatePhase, c.settings.syncIssue,
+    ) { s, release, phase, issue ->
+        s.copy(update = release?.let { UpdateUi(it.version, phase) }, syncIssue = issue)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
 
     fun selectQueue(q: Queue) {
@@ -132,7 +140,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refresh() {
-        SyncScheduler.syncNow(getApplication())
+        val app = getApplication<Application>()
+        // The sync waits for a network; say so instead of a button that silently does nothing.
+        if (!isOnline(app)) viewModelScope.launch { c.settings.setSyncIssue(SyncIssue(SyncIssue.Kind.OFFLINE)) }
+        SyncScheduler.syncNow(app)
+    }
+
+    private fun isOnline(ctx: Context): Boolean {
+        val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return true
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     /** Download the new APK (once), then open the system installer. */
