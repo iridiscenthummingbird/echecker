@@ -21,8 +21,8 @@ android {
         applicationId = "ua.echecker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
     // Release signing reads from ~/.gradle/gradle.properties (never committed). Without those
     // properties the release build is left unsigned; debug builds are unaffected.
