@@ -4,12 +4,16 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import ua.echecker.i18n.TestStrings
 import ua.echecker.sync.SyncWorker
 import java.io.IOException
 import java.net.UnknownHostException
 import java.time.Duration
 import java.time.Instant
 
+@RunWith(RobolectricTestRunner::class)
 class SyncIssueTest {
     @Test fun `classifies errors`() {
         assertEquals(SyncIssue.Kind.FORMAT, SyncIssue.from(SourceFormatException("x")).kind)
@@ -20,11 +24,11 @@ class SyncIssueTest {
     }
 
     @Test fun `messages`() {
-        assertEquals("Не вдалося оновити: джерело не відповідає (HTTP 503)", SyncIssue(SyncIssue.Kind.SERVER, 503).message())
-        assertEquals("Немає інтернету — оновимо, щойно з'явиться", SyncIssue(SyncIssue.Kind.OFFLINE).message())
+        assertEquals("Не вдалося оновити: джерело не відповідає (HTTP 503)", SyncIssue(SyncIssue.Kind.SERVER, 503).message(TestStrings.uk))
+        assertEquals("Немає інтернету — оновимо, щойно з'явиться", SyncIssue(SyncIssue.Kind.OFFLINE).message(TestStrings.uk))
         val backup = SyncIssue(SyncIssue.Kind.FORMAT, backupSource = ChannelFetcher.OBLENERGO_CHANNEL)
         assertFalse(backup.isError)
-        assertTrue(backup.message(), backup.message().contains("Дані з резервного: Telegram «Запоріжжяобленерго»"))
+        assertTrue(backup.message(TestStrings.uk), backup.message(TestStrings.uk).contains("Дані з резервного: Telegram «Запоріжжяобленерго»"))
     }
 
     @Test fun `incremental sync pages back to an hour before the last full read, at most 30 days`() {

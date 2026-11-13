@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.map
 import ua.echecker.domain.Queue
 import ua.echecker.update.ReleaseInfo
 import java.time.Instant
+import java.time.LocalDate
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
@@ -35,7 +36,45 @@ class SettingsStore(private val context: Context) {
     private val ISSUE_HTTP = intPreferencesKey("sync_issue_http")
     private val ISSUE_BACKUP = stringPreferencesKey("sync_issue_backup")
 
+    private val ALERT_LEAD = intPreferencesKey("alert_lead_minutes")
+    private val ALERT_BACK_ON = booleanPreferencesKey("alert_back_on")
+    private val ALERT_SCHEDULE = booleanPreferencesKey("alert_schedule_changes")
+    private val LAST_ALERT = stringPreferencesKey("last_alert_key")
+    /** First Kyiv day the backfill covered; days from here on without a schedule had no outages scheduled. */
+    private val HISTORY_START = stringPreferencesKey("history_start")
+
+    /** Null on installs that backfilled before this was recorded; callers fall back to the earliest stored day. */
+    val historyStart: Flow<LocalDate?> = context.dataStore.data.map { p ->
+        p[HISTORY_START]?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    }
+
+    suspend fun setHistoryStart(date: LocalDate) {
+        context.dataStore.edit { it[HISTORY_START] = date.toString() }
+    }
+
     val queue: Flow<Queue?> = context.dataStore.data.map { p -> p[QUEUE]?.let(Queue::parse) }
+
+    /** What to notify about; defaults are on so the feature is discoverable, each can be turned off in the app. */
+    val alertPrefs: Flow<AlertPrefs> = context.dataStore.data.map { p ->
+        AlertPrefs(
+            leadMinutes = p[ALERT_LEAD] ?: AlertPrefs.DEFAULT_LEAD,
+            backOn = p[ALERT_BACK_ON] ?: true,
+            scheduleChanges = p[ALERT_SCHEDULE] ?: true,
+        )
+    }
+    val lastAlertKey: Flow<String?> = context.dataStore.data.map { p -> p[LAST_ALERT] }
+
+    suspend fun setAlertPrefs(prefs: AlertPrefs) {
+        context.dataStore.edit {
+            it[ALERT_LEAD] = prefs.leadMinutes
+            it[ALERT_BACK_ON] = prefs.backOn
+            it[ALERT_SCHEDULE] = prefs.scheduleChanges
+        }
+    }
+
+    suspend fun markAlertShown(key: String) {
+        context.dataStore.edit { it[LAST_ALERT] = key }
+    }
     val lastSyncAt: Flow<Instant?> = context.dataStore.data.map { p -> p[LAST_SYNC]?.let(Instant::ofEpochMilli) }
     val backfillDone: Flow<Boolean> = context.dataStore.data.map { p -> p[BACKFILL_DONE] ?: false }
 

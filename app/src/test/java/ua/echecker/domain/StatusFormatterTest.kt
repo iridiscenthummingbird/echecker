@@ -3,17 +3,21 @@ package ua.echecker.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import ua.echecker.i18n.TestStrings
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.ZonedDateTime
 
+@RunWith(RobolectricTestRunner::class)
 class StatusFormatterTest {
     private val now: ZonedDateTime = LocalDateTime.of(2026, 11, 11, 10, 0).atZone(KyivTime.ZONE)
     private fun t(dayOffset: Long, h: Int, m: Int) =
         now.toLocalDate().plusDays(dayOffset).atTime(h, m).atZone(KyivTime.ZONE)
 
     private fun fmt(s: PowerStatus, lastSyncAgo: Duration? = Duration.ofMinutes(10)) =
-        StatusFormatter.format(s, now, lastSyncAgo?.let { now.toInstant().minus(it) })
+        StatusFormatter.format(s, now, lastSyncAgo?.let { now.toInstant().minus(it) }, TestStrings.uk)
 
     @Test fun `on with next off today`() {
         assertEquals(StatusText("💡 Світло є", "вимкнуть о 15:30", null), fmt(PowerStatus.On(t(0, 15, 30))))

@@ -4,6 +4,9 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import ua.echecker.i18n.TestStrings
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
@@ -18,6 +21,7 @@ import java.util.TimeZone
  * The channel publishes schedules in Kyiv / Zaporizhzhia (Ukraine) local time.
  * Everything must be computed in Europe/Kyiv no matter what time zone the phone is set to.
  */
+@RunWith(RobolectricTestRunner::class)
 class TimeZoneTest {
     private val originalDefault: TimeZone = TimeZone.getDefault()
     private val q11 = Queue(1, 1)
@@ -71,6 +75,7 @@ class TimeZoneTest {
                 PowerStatus.Off(kyiv(day, 19, 30)),
                 nowInstant.atZone(ZoneId.of(zone)),
                 lastSyncAt = nowInstant.minusSeconds(4 * 3600),
+                s = TestStrings.uk,
             )
             assertEquals(zone, "увімкнуть о 19:30", text.subtitle)
             assertEquals(zone, "оновлено о 12:00", text.staleNote)
@@ -81,7 +86,7 @@ class TimeZoneTest {
         // 23:30 Kyiv on 11.11 = 21:30 UTC = 06:30 on 12.11 in Tokyo; next change 01:00 Kyiv on 12.11 is "tomorrow".
         val day = LocalDate.of(2026, 11, 11)
         val now = kyiv(day, 23, 30).withZoneSameInstant(ZoneId.of("Asia/Tokyo"))
-        val text = StatusFormatter.format(PowerStatus.Off(kyiv(day.plusDays(1), 1, 0)), now, null)
+        val text = StatusFormatter.format(PowerStatus.Off(kyiv(day.plusDays(1), 1, 0)), now, null, TestStrings.uk)
         assertEquals("увімкнуть завтра о 01:00", text.subtitle)
     }
 

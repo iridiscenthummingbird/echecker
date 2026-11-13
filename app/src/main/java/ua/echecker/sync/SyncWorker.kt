@@ -19,6 +19,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import ua.echecker.container
 import ua.echecker.data.SyncIssue
+import ua.echecker.domain.AlertTexts
+import ua.echecker.i18n.strings
+import ua.echecker.domain.KyivTime
+import ua.echecker.domain.Queue
+import ua.echecker.domain.Schedule
+import ua.echecker.domain.ScheduleChanges
+import ua.echecker.notify.Notifications
+import ua.echecker.notify.OutageAlertScheduler
+import java.time.LocalDate
 import ua.echecker.widget.WidgetUpdater
 import java.time.Duration
 import java.time.Instant
@@ -31,9 +40,14 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val backfilled = c.settings.backfillDone.first()
         val lastPrimary = c.settings.primarySyncedAt.first() ?: c.settings.lastSyncAt.first()
         val lastBackupCheck = c.settings.backupCheckedAt.first()
+        val queue = c.settings.queue.first()
+        val today = KyivTime.dateOf(now)
+        // The first sync (backfill) would report every day as "published"; only compare once we have a baseline.
+        val before = if (queue != null && backfilled) snapshot(today) else null
+        val since = sinceFor(now, lastPrimary.takeIf { backfilled })
         return try {
             val result = c.repository.sync(
-                since = sinceFor(now, lastPrimary.takeIf { backfilled }),
+                since = since,
                 now = now,
                 checkBackupsForGaps = lastBackupCheck == null || Duration.between(lastBackupCheck, now) >= BACKUP_GAP_INTERVAL,
             )
@@ -42,14 +56,20 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             val primaryError = result.primaryError
             if (primaryError == null) {
                 c.settings.markPrimarySynced(now)
-                if (!backfilled) c.settings.markBackfillDone()
+                if (!backfilled) {
+                    c.settings.markBackfillDone()
+                    // The first full day the backfill read (its first, partial day may miss an early-morning post).
+                    c.settings.setHistoryStart(KyivTime.dateOf(since).plusDays(1))
+                }
                 c.settings.setSyncIssue(null)
             } else {
                 Log.w(TAG, "Primary source failed; used backups ${result.backupsAnswered}", primaryError)
                 c.settings.setSyncIssue(SyncIssue.from(primaryError).copy(backupSource = result.backupsAnswered.first()))
             }
             c.settings.markSynced(now)
+            if (queue != null && before != null) notifyScheduleChanges(queue, today, before)
             refreshWidgets()
+            bestEffort("Alert scheduling") { OutageAlertScheduler.reschedule(applicationContext) }
             Result.success()
         } catch (e: CancellationException) {
             throw e
@@ -60,13 +80,31 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
     }
 
-    private suspend fun refreshWidgets() {
+    private suspend fun snapshot(today: LocalDate): Map<LocalDate, Schedule?> {
+        val repo = applicationContext.container.repository
+        return listOf(today, today.plusDays(1)).associateWith { repo.get(it) }
+    }
+
+    private suspend fun notifyScheduleChanges(queue: Queue, today: LocalDate, before: Map<LocalDate, Schedule?>) {
+        if (!applicationContext.container.settings.alertPrefs.first().scheduleChanges) return
+        bestEffort("Schedule change notification") {
+            for (change in ScheduleChanges.detect(today, queue, before, snapshot(today))) {
+                val id = if (change.isToday) Notifications.ID_SCHEDULE_TODAY else Notifications.ID_SCHEDULE_TOMORROW
+                Notifications.show(applicationContext, Notifications.CHANNEL_SCHEDULE, id, AlertTexts.forChange(change, queue, applicationContext.strings))
+            }
+        }
+    }
+
+    private suspend fun refreshWidgets() = bestEffort("Widget update") { WidgetUpdater.refreshAll(applicationContext) }
+
+    /** Side effects of a successful sync must not turn it into a failure. */
+    private suspend fun bestEffort(what: String, block: suspend () -> Unit) {
         try {
-            WidgetUpdater.refreshAll(applicationContext)
+            block()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Widget update failed", e)
+            Log.w(TAG, "$what failed", e)
         }
     }
 

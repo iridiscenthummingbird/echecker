@@ -45,26 +45,42 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import androidx.glance.appwidget.state.getAppWidgetState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import ua.echecker.MainActivity
 import ua.echecker.R
+import ua.echecker.container
+import androidx.glance.semantics.contentDescription
+import androidx.glance.semantics.semantics
+import ua.echecker.domain.Interval
+import ua.echecker.i18n.strings
 import ua.echecker.domain.PowerStatus
+import ua.echecker.domain.Queue
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 
-class PowerWidget : GlanceAppWidget() {
+/** Status widget; subclasses decide which queue it shows. */
+abstract class StatusWidget : GlanceAppWidget() {
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** The queue to show, given this widget instance's Glance state. */
+    protected abstract suspend fun queueOf(context: Context, prefs: Preferences): Queue?
+
+    /** Label the widget with its queue. */
+    protected open val showQueue: Boolean = false
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val initial = WidgetStateLoader.load(context)
+        val initialPrefs = getAppWidgetState<Preferences>(context, PreferencesGlanceStateDefinition, id)
+        val initial = WidgetStateLoader.load(context, queueOf(context, initialPrefs), showQueue)
         provideContent {
             // A running Glance session only recomposes on update(); bumping REFRESH_NONCE re-runs the loader.
-            val nonce = currentState<Preferences>()[REFRESH_NONCE]
-            val state by produceState(initialValue = initial, nonce) {
+            val prefs = currentState<Preferences>()
+            val state by produceState(initialValue = initial, prefs[REFRESH_NONCE], prefs[WIDGET_QUEUE]) {
                 value = try {
-                    WidgetStateLoader.load(context)
+                    WidgetStateLoader.load(context, queueOf(context, prefs), showQueue)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -77,12 +93,27 @@ class PowerWidget : GlanceAppWidget() {
     }
 
     private companion object {
-        const val TAG = "PowerWidget"
+        const val TAG = "StatusWidget"
     }
+}
+
+/** Follows the queue selected in the app. */
+class PowerWidget : StatusWidget() {
+    override suspend fun queueOf(context: Context, prefs: Preferences): Queue? = context.container.settings.queue.first()
+}
+
+/** Shows a queue of its own, picked in [QueueWidgetConfigActivity] (e.g. parents' or work address). */
+class QueueWidget : StatusWidget() {
+    override val showQueue = true
+    override suspend fun queueOf(context: Context, prefs: Preferences): Queue? = prefs[WIDGET_QUEUE]?.let(Queue::parse)
 }
 
 class PowerWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = PowerWidget()
+}
+
+class QueueWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = QueueWidget()
 }
 
 // Same palette as the app's hero card (ui/theme/Theme.kt).
@@ -102,12 +133,14 @@ private data class WidgetStyle(
     val emoji: String,
 )
 
-private fun styleFor(state: WidgetState): WidgetStyle = when (state.status) {
+private fun styleFor(state: WidgetState, context: Context): WidgetStyle = when (state.status) {
     is PowerStatus.On -> WidgetStyle(
-        R.drawable.widget_bg_on, R.drawable.widget_icon_bg_dark, OnFg, OnFg, MarkerOn, "Світло є", "💡",
+        R.drawable.widget_bg_on, R.drawable.widget_icon_bg_dark, OnFg, OnFg, MarkerOn,
+        context.getString(R.string.status_on), "💡",
     )
     is PowerStatus.Off -> WidgetStyle(
-        R.drawable.widget_bg_off, R.drawable.widget_icon_bg_light, OffFg, OffAccent, OffAccent, "Світла немає", "🌙",
+        R.drawable.widget_bg_off, R.drawable.widget_icon_bg_light, OffFg, OffAccent, OffAccent,
+        context.getString(R.string.status_off), "🌙",
     )
     else -> WidgetStyle(
         R.drawable.widget_bg_neutral, R.drawable.widget_icon_bg_light, NeutralFg, NeutralFg, OffAccent,
@@ -127,9 +160,19 @@ private fun WidgetContent(state: WidgetState) {
     val size = LocalSize.current
     val tall = size.height >= 110.dp
     val showIcon = size.width >= 200.dp
-    val s = styleFor(state)
+    val context = LocalContext.current
+    val s = styleFor(state, context)
     val fg = ColorProvider(s.fg)
     val muted = ColorProvider(s.fg.copy(alpha = 0.7f))
+    val queueLabel = state.queue?.let { context.getString(R.string.queue_label, it.toString()) }
+    // TalkBack reads the whole widget as one sentence instead of the emoji and loose fragments.
+    val spoken = listOfNotNull(
+        queueLabel,
+        s.title,
+        state.text.subtitle,
+        state.todayIntervals?.let { timelineDescription(context, it) },
+        state.text.staleNote,
+    ).joinToString(". ")
 
     Column(
         modifier = GlanceModifier
@@ -137,6 +180,7 @@ private fun WidgetContent(state: WidgetState) {
             .background(ImageProvider(s.background))
             .cornerRadius(24.dp)
             .padding(horizontal = 16.dp, vertical = if (tall) 14.dp else 8.dp)
+            .semantics { contentDescription = spoken }
             .clickable(actionStartActivity<MainActivity>()),
         verticalAlignment = if (tall) Alignment.Top else Alignment.CenterVertically,
     ) {
@@ -151,10 +195,13 @@ private fun WidgetContent(state: WidgetState) {
             }
             Column {
                 if (tall) {
-                    Text("ЗАРАЗ", style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold, color = muted))
+                    val label = listOfNotNull(context.getString(R.string.now_label), queueLabel)
+                        .joinToString(" · ").uppercase(context.strings.locale)
+                    Text(label, style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold, color = muted), maxLines = 1)
                 }
                 Text(
-                    s.title,
+                    // Short widgets have no label row: show a pinned queue next to the status instead.
+                    if (!tall && state.queue != null) "${s.title} · ${state.queue}" else s.title,
                     style = TextStyle(fontSize = if (tall) 21.sp else 17.sp, fontWeight = FontWeight.Bold, color = fg),
                     maxLines = 1,
                 )
@@ -179,13 +226,18 @@ private fun WidgetContent(state: WidgetState) {
     }
 }
 
+/** Today's outages as text, for TalkBack ("Відключення: 13:00–18:00, 22:00–24:00"). */
+private fun timelineDescription(context: Context, intervals: List<Interval>): String =
+    if (intervals.isEmpty()) context.getString(R.string.a11y_timeline_none)
+    else context.getString(R.string.a11y_timeline, intervals.joinToString(", ") { it.format() })
+
 /** A self-ticking "через H:MM:SS" — a RemoteViews Chronometer, so no per-second widget updates. */
 @Composable
 private fun Countdown(target: Instant, color: Color) {
     val context = LocalContext.current
     val left = Duration.between(Instant.now(), target).toMillis()
     val rv = RemoteViews(context.packageName, R.layout.widget_countdown).apply {
-        setChronometer(R.id.countdown, SystemClock.elapsedRealtime() + left, "через %s", true)
+        setChronometer(R.id.countdown, SystemClock.elapsedRealtime() + left, context.getString(R.string.countdown_format), true)
         setChronometerCountDown(R.id.countdown, true)
         setTextColor(R.id.countdown, color.toArgb())
     }
@@ -193,8 +245,9 @@ private fun Countdown(target: Instant, color: Color) {
 }
 
 @Composable
-private fun Timeline(state: WidgetState, intervals: List<ua.echecker.domain.Interval>, s: WidgetStyle, widthDp: Float) {
-    val density = LocalContext.current.resources.displayMetrics.density
+private fun Timeline(state: WidgetState, intervals: List<Interval>, s: WidgetStyle, widthDp: Float) {
+    val context = LocalContext.current
+    val density = context.resources.displayMetrics.density
     val bmp = TimelineBitmap.render(
         intervals = intervals,
         nowMinute = state.nowMinute,
@@ -209,7 +262,7 @@ private fun Timeline(state: WidgetState, intervals: List<ua.echecker.domain.Inte
     )
     Image(
         provider = ImageProvider(bmp),
-        contentDescription = null,
+        contentDescription = timelineDescription(context, intervals),
         modifier = GlanceModifier.fillMaxWidth().height((bmp.height / density).dp),
     )
 }

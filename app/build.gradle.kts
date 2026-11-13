@@ -5,6 +5,12 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
+}
+
+// Every DB version's schema is committed under app/schemas/: migrations are written and tested against them.
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 android {
@@ -33,9 +39,16 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: shrink, optimize and obfuscate; libraries (AndroidX, OkHttp, DataStore) ship their own keep rules.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfigs.findByName("release")?.let { signingConfig = it }
         }
+    }
+    // Per-app language (Android 13+ system settings): Ukrainian (default) and English.
+    androidResources {
+        generateLocaleConfig = true
     }
     buildFeatures {
         compose = true
@@ -46,6 +59,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     testOptions { unitTests.isIncludeAndroidResources = true }
+    // MigrationTestHelper reads the exported schemas from the app's assets; Robolectric serves the debug
+    // variant's merged assets (not test ones), so they ship in debug builds only — never in release.
+    sourceSets.getByName("debug").assets.srcDir("$projectDir/schemas")
 }
 
 kotlin {
@@ -74,4 +90,5 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.room.testing)
 }
