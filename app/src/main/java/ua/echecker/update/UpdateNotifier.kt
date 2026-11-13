@@ -21,7 +21,7 @@ object UpdateNotifier {
         if (!canNotify(context)) return false
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Оновлення застосунку", NotificationManager.IMPORTANCE_DEFAULT),
+            NotificationChannel(CHANNEL, context.getString(R.string.channel_updates), NotificationManager.IMPORTANCE_DEFAULT),
         )
         val open = PendingIntent.getActivity(
             context, 0,
@@ -30,8 +30,8 @@ object UpdateNotifier {
         )
         val n = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
-            .setContentTitle("Доступна версія ${release.version}")
-            .setContentText("Відкрийте застосунок, щоб оновитися")
+            .setContentTitle(context.getString(R.string.update_available, release.version))
+            .setContentText(context.getString(R.string.update_notification_text))
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()

@@ -19,6 +19,7 @@ import ua.echecker.domain.PowerStatusCalculator
 import ua.echecker.domain.Queue
 import ua.echecker.domain.StatusFormatter
 import ua.echecker.domain.StatusText
+import ua.echecker.i18n.strings
 import ua.echecker.notify.setPrecise
 import java.time.Duration
 import java.time.Instant
@@ -36,9 +37,7 @@ data class WidgetState(
     val nowMinute: Int,
     /** The queue of a widget pinned to its own queue; null on the main widget. */
     val queue: Queue? = null,
-) {
-    val queueLabel: String? get() = queue?.let { "Черга $it" }
-}
+)
 
 object WidgetStateLoader {
     /** @param showQueue label the widget with its queue (widgets pinned to a queue of their own). */
@@ -53,7 +52,7 @@ object WidgetStateLoader {
         WidgetRefreshScheduler.rescheduleAll(context, now)
         return WidgetState(
             status = status,
-            text = StatusFormatter.format(status, now, lastSync),
+            text = StatusFormatter.format(status, now, lastSync, context.strings),
             todayIntervals = if (queue != null) todaySchedule?.intervalsFor(queue) else null,
             nowMinute = now.hour * 60 + now.minute,
             queue = queue.takeIf { showQueue },

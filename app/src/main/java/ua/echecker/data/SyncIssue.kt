@@ -1,8 +1,10 @@
 package ua.echecker.data
 
+import ua.echecker.R
+import ua.echecker.i18n.Strings
 import java.io.IOException
 
-/** Why the last sync did not fully succeed; shown next to the "Оновити" button. */
+/** Why the last sync did not fully succeed; shown next to the Refresh button. */
 data class SyncIssue(
     val kind: Kind,
     /** HTTP status for [Kind.SERVER]. */
@@ -12,19 +14,18 @@ data class SyncIssue(
 ) {
     enum class Kind { OFFLINE, NETWORK, SERVER, FORMAT, UNKNOWN }
 
-    /** User-facing text (Ukrainian). */
-    fun message(): String {
+    fun message(s: Strings): String {
         val reason = when (kind) {
-            Kind.OFFLINE -> "немає інтернету"
-            Kind.NETWORK -> "не вдалося з'єднатися"
-            Kind.SERVER -> "джерело не відповідає" + (httpCode?.let { " (HTTP $it)" } ?: "")
-            Kind.FORMAT -> "не вдалося прочитати канал — схоже, змінився його формат"
-            Kind.UNKNOWN -> "невідома помилка"
+            Kind.OFFLINE -> s.get(R.string.reason_offline)
+            Kind.NETWORK -> s.get(R.string.reason_network)
+            Kind.SERVER -> httpCode?.let { s.get(R.string.reason_server_code, it) } ?: s.get(R.string.reason_server)
+            Kind.FORMAT -> s.get(R.string.reason_format)
+            Kind.UNKNOWN -> s.get(R.string.reason_unknown)
         }
         return when {
-            backupSource != null -> "Основне джерело недоступне ($reason). Дані з резервного: ${sourceLabel(backupSource)}"
-            kind == Kind.OFFLINE -> "Немає інтернету — оновимо, щойно з'явиться"
-            else -> "Не вдалося оновити: $reason"
+            backupSource != null -> s.get(R.string.issue_backup, reason, sourceLabel(backupSource, s))
+            kind == Kind.OFFLINE -> s.get(R.string.issue_offline)
+            else -> s.get(R.string.issue_failed, reason)
         }
     }
 
@@ -39,8 +40,8 @@ data class SyncIssue(
             else -> SyncIssue(Kind.UNKNOWN)
         }
 
-        fun sourceLabel(id: String): String = when (id) {
-            ChannelFetcher.OBLENERGO_CHANNEL -> "Telegram «Запоріжжяобленерго»"
+        fun sourceLabel(id: String, s: Strings): String = when (id) {
+            ChannelFetcher.OBLENERGO_CHANNEL -> s.get(R.string.source_oblenergo)
             else -> id
         }
     }

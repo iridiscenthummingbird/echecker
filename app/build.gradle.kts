@@ -46,6 +46,10 @@ android {
             signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
+    // Per-app language (Android 13+ system settings): Ukrainian (default) and English.
+    androidResources {
+        generateLocaleConfig = true
+    }
     buildFeatures {
         compose = true
         buildConfig = true

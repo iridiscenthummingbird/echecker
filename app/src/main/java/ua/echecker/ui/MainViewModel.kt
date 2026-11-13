@@ -31,8 +31,6 @@ import ua.echecker.domain.Interval
 import ua.echecker.domain.KyivTime
 import ua.echecker.domain.PowerStatus
 import ua.echecker.domain.PowerStatusCalculator
-import ua.echecker.domain.StatusFormatter
-import ua.echecker.domain.StatusText
 import ua.echecker.domain.Queue
 import ua.echecker.domain.Schedule
 import ua.echecker.sync.SyncScheduler
@@ -69,7 +67,8 @@ data class MainUiState(
     /** Kyiv minute of day, for the "now" marker on today's timeline. */
     val nowMinute: Int = 0,
     val status: PowerStatus = PowerStatus.QueueNotSelected,
-    val statusText: StatusText? = null,
+    /** Kyiv time of this state; the status text is formatted from it in the UI, in the current language. */
+    val now: ZonedDateTime? = null,
     val update: UpdateUi? = null,
     /** Why the last sync failed or fell back to a backup source; null after a clean sync. */
     val syncIssue: SyncIssue? = null,
@@ -133,7 +132,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             refreshing = refreshing,
             nowMinute = now.hour * 60 + now.minute,
             status = status,
-            statusText = StatusFormatter.format(status, now, lastSync),
+            now = now,
         )
     }
 

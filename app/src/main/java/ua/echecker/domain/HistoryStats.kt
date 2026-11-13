@@ -1,5 +1,7 @@
 package ua.echecker.domain
 
+import ua.echecker.R
+import ua.echecker.i18n.Strings
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -58,24 +60,16 @@ data class HistoryStats(
     }
 }
 
-/** "5 год", "5 год 30 хв", "45 хв". */
-fun formatDuration(minutes: Int): String {
+/** "5 год", "5 год 30 хв", "45 хв" (uk); "5 h 30 min" (en). */
+fun formatDuration(minutes: Int, s: Strings): String {
     val h = minutes / 60
     val m = minutes % 60
     return when {
-        h == 0 -> "$m хв"
-        m == 0 -> "$h год"
-        else -> "$h год $m хв"
+        h == 0 -> s.get(R.string.duration_m, m)
+        m == 0 -> s.get(R.string.duration_h, h)
+        else -> s.get(R.string.duration_h_m, h, m)
     }
 }
 
-/** "1 день", "3 дні", "7 днів", "11 днів", "21 день". */
-fun formatDays(n: Int): String {
-    val word = when {
-        n % 100 in 11..14 -> "днів"
-        n % 10 == 1 -> "день"
-        n % 10 in 2..4 -> "дні"
-        else -> "днів"
-    }
-    return "$n $word"
-}
+/** "1 день", "3 дні", "7 днів" (uk); "1 day", "7 days" (en). */
+fun formatDays(n: Int, s: Strings): String = s.plural(R.plurals.days, n, n)

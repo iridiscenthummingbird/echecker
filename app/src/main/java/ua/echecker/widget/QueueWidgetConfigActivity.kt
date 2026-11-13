@@ -28,6 +28,10 @@ import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import ua.echecker.R
 import ua.echecker.domain.Queue
 import ua.echecker.ui.QueuePicker
 import ua.echecker.ui.theme.EcheckerTheme
@@ -57,14 +61,18 @@ class QueueWidgetConfigActivity : ComponentActivity() {
                             Modifier.safeDrawingPadding().padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text("Черга для віджета", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Text(
-                                "Цей віджет показуватиме обрану чергу незалежно від черги в застосунку — " +
-                                    "наприклад, для батьків чи роботи.",
+                                stringResource(R.string.widget_setup_title),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.semantics { heading() },
+                            )
+                            Text(
+                                stringResource(R.string.widget_setup_text),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            QueuePicker(selected, title = "Оберіть чергу") { q ->
+                            QueuePicker(selected, title = stringResource(R.string.widget_setup_pick)) { q ->
                                 selected = q
                                 save(appWidgetId, q)
                             }

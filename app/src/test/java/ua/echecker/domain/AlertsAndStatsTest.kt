@@ -3,9 +3,13 @@ package ua.echecker.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import ua.echecker.i18n.TestStrings
 import java.time.LocalDate
 import java.time.ZonedDateTime
 
+@RunWith(RobolectricTestRunner::class)
 class AlertsAndStatsTest {
     private val q = Queue(3, 1)
     private val today = LocalDate.of(2026, 11, 12)
@@ -32,7 +36,7 @@ class AlertsAndStatsTest {
         )
         assertEquals(listOf(OutageSpan(at(today, 22), at(tomorrow, 3))), spans)
         val alert = OutageAlerts.upcoming(spans, at(tomorrow, 1), null, true, tomorrow).single()
-        assertEquals("Черга 3.1 · відключення 22:00–03:00 закінчилось за графіком", AlertTexts.forAlert(alert, q).body)
+        assertEquals("Черга 3.1 · відключення 22:00–03:00 закінчилось за графіком", AlertTexts.forAlert(alert, q, TestStrings.uk).body)
     }
 
     // ---- alerts ----
@@ -70,14 +74,14 @@ class AlertsAndStatsTest {
         val soon = OutageAlerts.upcoming(spans, at(today, 10), 30, true, tomorrow)
         assertEquals(
             NotificationText("Через 30 хв вимкнуть світло", "Черга 3.1 · без світла 13:00–18:00"),
-            AlertTexts.forAlert(soon[0], q),
+            AlertTexts.forAlert(soon[0], q, TestStrings.uk),
         )
         assertEquals(
             NotificationText("Світло має повернутися", "Черга 3.1 · відключення 22:00–24:00 закінчилось за графіком"),
-            AlertTexts.forAlert(soon[3], q),
+            AlertTexts.forAlert(soon[3], q, TestStrings.uk),
         )
         val hour = OutageAlerts.upcoming(spans, at(today, 10), 60, false, tomorrow)
-        assertEquals("Через 1 год вимкнуть світло", AlertTexts.forAlert(hour[0], q).title)
+        assertEquals("Через 1 год вимкнуть світло", AlertTexts.forAlert(hour[0], q, TestStrings.uk).title)
     }
 
     // ---- schedule changes ----
@@ -102,9 +106,9 @@ class AlertsAndStatsTest {
         )
         assertEquals(
             NotificationText("Графік на завтра, 13.11", "Черга 3.1: 00:00–03:00 (без світла 3 год)"),
-            AlertTexts.forChange(changes[1], q),
+            AlertTexts.forChange(changes[1], q, TestStrings.uk),
         )
-        assertEquals("Графік на сьогодні змінився", AlertTexts.forChange(changes[0], q).title)
+        assertEquals("Графік на сьогодні змінився", AlertTexts.forChange(changes[0], q, TestStrings.uk).title)
     }
 
     @Test fun `a change in another queue is not reported`() {
@@ -116,7 +120,7 @@ class AlertsAndStatsTest {
 
     @Test fun `cancelled outages read as no outages`() {
         val change = ScheduleChange(tomorrow, false, ScheduleChange.Kind.CHANGED, emptyList())
-        assertEquals("Черга 3.1: без відключень", AlertTexts.forChange(change, q).body)
+        assertEquals("Черга 3.1: без відключень", AlertTexts.forChange(change, q, TestStrings.uk).body)
     }
 
     // ---- history stats ----
@@ -160,9 +164,9 @@ class AlertsAndStatsTest {
     }
 
     @Test fun `durations and day counts`() {
-        assertEquals("45 хв", formatDuration(45))
-        assertEquals("5 год", formatDuration(300))
-        assertEquals("5 год 30 хв", formatDuration(330))
-        assertEquals(listOf("1 день", "3 дні", "7 днів", "11 днів", "21 день", "30 днів"), listOf(1, 3, 7, 11, 21, 30).map(::formatDays))
+        assertEquals("45 хв", formatDuration(45, TestStrings.uk))
+        assertEquals("5 год", formatDuration(300, TestStrings.uk))
+        assertEquals("5 год 30 хв", formatDuration(330, TestStrings.uk))
+        assertEquals(listOf("1 день", "3 дні", "7 днів", "11 днів", "21 день", "30 днів"), listOf(1, 3, 7, 11, 21, 30).map { formatDays(it, TestStrings.uk) })
     }
 }

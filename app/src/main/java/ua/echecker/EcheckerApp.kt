@@ -3,7 +3,11 @@ package ua.echecker
 import android.app.Application
 import android.content.Context
 import androidx.work.Configuration
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
+import ua.echecker.widget.WidgetUpdater
 import ua.echecker.data.ChannelFetcher
 import ua.echecker.data.ScheduleRepository
 import ua.echecker.data.SettingsStore
@@ -43,6 +47,15 @@ class EcheckerApp : Application(), Configuration.Provider {
         container = AppContainer(this)
         SyncScheduler.schedulePeriodic(this)
         Updates.schedulePeriodic(this)
+    }
+
+    /** Language (system or per-app) changed: re-render the widgets so they don't keep the old one. */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        @OptIn(DelicateCoroutinesApi::class)
+        GlobalScope.launch {
+            runCatching { WidgetUpdater.refreshAll(this@EcheckerApp) }
+        }
     }
 }
 

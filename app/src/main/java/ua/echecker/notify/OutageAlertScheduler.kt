@@ -17,6 +17,7 @@ import ua.echecker.domain.KyivTime
 import ua.echecker.domain.OutageAlert
 import ua.echecker.domain.OutageAlerts
 import ua.echecker.domain.PowerStatusCalculator
+import ua.echecker.i18n.strings
 import ua.echecker.widget.WidgetUpdater
 import java.time.Duration
 import java.time.Instant
@@ -73,7 +74,7 @@ object OutageAlertScheduler {
             val c = context.container
             val queue = c.settings.queue.first()
             if (queue != null && c.settings.lastAlertKey.first() != due.key) {
-                Notifications.show(context, Notifications.CHANNEL_OUTAGES, Notifications.ID_OUTAGE, AlertTexts.forAlert(due, queue))
+                Notifications.show(context, Notifications.CHANNEL_OUTAGES, Notifications.ID_OUTAGE, AlertTexts.forAlert(due, queue, context.strings))
                 c.settings.markAlertShown(due.key)
             }
         }
@@ -98,10 +99,21 @@ class OutageAlertReceiver : BroadcastReceiver() {
 /** Alarms are cleared on reboot and drift on clock changes: re-arm them and refresh the widgets. */
 class SystemEventsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // The receiver is exported for system broadcasts; ignore anything else sent to it explicitly.
+        if (intent.action !in HANDLED) return
         runAsync(context) {
             OutageAlertScheduler.reschedule(context)
             WidgetUpdater.refreshAll(context)
         }
+    }
+
+    private companion object {
+        val HANDLED = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+        )
     }
 }
 

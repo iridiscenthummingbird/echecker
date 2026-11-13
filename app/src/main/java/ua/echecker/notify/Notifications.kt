@@ -36,15 +36,16 @@ object Notifications {
             .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-    private fun ensureChannels(nm: NotificationManager) {
+    /** Re-created on every post, so channel names follow the current app language. */
+    private fun ensureChannels(context: Context, nm: NotificationManager) {
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_OUTAGES, "Відключення світла", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Перед відключенням і коли світло має повернутися"
+            NotificationChannel(CHANNEL_OUTAGES, context.getString(R.string.channel_outages), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = context.getString(R.string.channel_outages_description)
             },
         )
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_SCHEDULE, "Зміни графіка", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Опубліковано або змінено графік на сьогодні чи завтра"
+            NotificationChannel(CHANNEL_SCHEDULE, context.getString(R.string.channel_schedule), NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = context.getString(R.string.channel_schedule_description)
             },
         )
     }
@@ -53,7 +54,7 @@ object Notifications {
     fun show(context: Context, channel: String, id: Int, text: NotificationText): Boolean {
         if (!canNotify(context)) return false
         val nm = context.getSystemService(NotificationManager::class.java)
-        ensureChannels(nm)
+        ensureChannels(context, nm)
         val open = PendingIntent.getActivity(
             context, 0,
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),

@@ -43,8 +43,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import ua.echecker.R
+import ua.echecker.i18n.Strings
+import ua.echecker.i18n.strings
 import ua.echecker.data.AlertPrefs
 import ua.echecker.data.SyncIssue
 import ua.echecker.domain.HistoryStats
@@ -55,17 +72,28 @@ import ua.echecker.domain.Interval
 import ua.echecker.domain.KyivTime
 import ua.echecker.domain.PowerStatus
 import ua.echecker.domain.Queue
+import ua.echecker.domain.StatusFormatter
 import ua.echecker.domain.StatusText
 import ua.echecker.ui.theme.Power
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val UK = Locale.forLanguageTag("uk")
-private val DAY = DateTimeFormatter.ofPattern("dd.MM, EEE", UK)
-private val DAY_SHORT = DateTimeFormatter.ofPattern("dd.MM", UK)
-private val WEEKDAY = DateTimeFormatter.ofPattern("EEE", UK)
+private val DAY_SHORT = DateTimeFormatter.ofPattern("dd.MM")
 private val SYNC = DateTimeFormatter.ofPattern("dd.MM HH:mm")
+
+/** Language of the app's resources (follows the per-app language), for weekday names and casing. */
+@Composable
+private fun appLocale(): Locale = LocalConfiguration.current.locales[0]
+
+@Composable
+private fun strings(): Strings = LocalContext.current.strings
+
+/** "Відключення: 13:00–18:00, 22:00–24:00" — what TalkBack reads for a timeline bar. */
+@Composable
+private fun timelineDescription(intervals: List<Interval>): String =
+    if (intervals.isEmpty()) stringResource(R.string.a11y_timeline_none)
+    else stringResource(R.string.a11y_timeline, intervals.joinToString(", ") { it.format() })
 
 private val CardShape = RoundedCornerShape(24.dp)
 
@@ -88,28 +116,34 @@ fun MainScreen(
             state.update?.let { u -> item { UpdateBanner(u, onInstallUpdate) } }
             if (!state.loaded) return@LazyColumn
             if (state.queue != null) {
-                item { StatusHero(state.status, state.statusText, state.today?.intervals, state.nowMinute) }
+                item {
+                    // Formatted here, not in the ViewModel, so a language change applies at once.
+                    val text = state.now?.let { StatusFormatter.format(state.status, it, state.lastSyncAt, strings()) }
+                    StatusHero(state.status, text, state.today?.intervals, state.nowMinute)
+                }
             }
             item { QueuePicker(state.queue, onSelect = onSelectQueue) }
             if (state.queue == null) {
                 item {
                     Text(
-                        "Оберіть чергу, щоб бачити графік",
+                        stringResource(R.string.pick_queue_prompt),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 return@LazyColumn
             }
-            val todayEmpty = if (state.lastSyncAt == null) "Немає даних" else "Відключень не заплановано"
-            item { DayCard("Сьогодні", state.today, todayEmpty, nowMinute = state.nowMinute) }
-            item { DayCard("Завтра", state.tomorrow, "Графік ще не опубліковано", nowMinute = null) }
+            item {
+                val todayEmpty = stringResource(if (state.lastSyncAt == null) R.string.status_no_data else R.string.status_no_schedule)
+                DayCard(stringResource(R.string.today), state.today, todayEmpty, nowMinute = state.nowMinute)
+            }
+            item { DayCard(stringResource(R.string.tomorrow), state.tomorrow, stringResource(R.string.not_published_yet), nowMinute = null) }
             item { SyncRow(state.lastSyncAt, state.refreshing, state.syncIssue, onRefresh) }
-            item { SectionTitle("Сповіщення", Modifier.padding(top = 6.dp, start = 4.dp)) }
+            item { SectionTitle(stringResource(R.string.section_notifications), Modifier.padding(top = 6.dp, start = 4.dp)) }
             item { NotificationsCard(state.alertPrefs, state.notificationsAllowed, onAlertPrefs, onAllowNotifications) }
-            item { SectionTitle("Історія", Modifier.padding(top = 6.dp, start = 4.dp)) }
+            item { SectionTitle(stringResource(R.string.section_history), Modifier.padding(top = 6.dp, start = 4.dp)) }
             if (state.history.isEmpty()) {
-                item { Text("Історія поки порожня", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item { Text(stringResource(R.string.history_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             } else {
                 state.historyStats?.takeIf { it.month.days > 0 }?.let { stats -> item { StatsCard(stats) } }
                 item { HistoryCard(state.history) }
@@ -130,12 +164,17 @@ private fun Header(queue: Queue?, loaded: Boolean) {
         ) { Bolt(Power.colors.onHeroOn, Modifier.size(20.dp)) }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Графік світла", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                stringResource(R.string.title_schedule),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() },
+            )
             Text(
                 when {
                     !loaded -> ""
-                    queue != null -> "Черга $queue"
-                    else -> "Черга не обрана"
+                    queue != null -> stringResource(R.string.queue_label, queue.toString())
+                    else -> stringResource(R.string.queue_not_selected)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -165,11 +204,12 @@ private fun Bolt(color: Color, modifier: Modifier) {
 @Composable
 private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
-        text.uppercase(UK),
+        text.uppercase(appLocale()),
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier,
+        // Lets TalkBack users jump between sections.
+        modifier = modifier.semantics { heading() },
     )
 }
 
@@ -189,16 +229,16 @@ private fun UpdateBanner(update: UpdateUi, onInstall: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                "Доступна версія ${update.version}",
+                stringResource(R.string.update_available, update.version),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = cs.onSecondaryContainer,
             )
             Text(
                 when (update.phase) {
-                    UpdatePhase.Failed -> "Не вдалося завантажити"
-                    is UpdatePhase.Ready -> "Завантажено, можна встановити"
-                    else -> "Зараз у вас ${ua.echecker.update.Updates.currentVersion}"
+                    UpdatePhase.Failed -> stringResource(R.string.update_failed)
+                    is UpdatePhase.Ready -> stringResource(R.string.update_ready)
+                    else -> stringResource(R.string.update_current, ua.echecker.update.Updates.currentVersion)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSecondaryContainer.copy(alpha = 0.75f),
@@ -217,10 +257,10 @@ private fun UpdateBanner(update: UpdateUi, onInstall: () -> Unit) {
             }
             Text(
                 when (update.phase) {
-                    UpdatePhase.Downloading -> "Завантаження…"
-                    is UpdatePhase.Ready -> "Встановити"
-                    UpdatePhase.Failed -> "Ще раз"
-                    UpdatePhase.Idle -> "Оновити"
+                    UpdatePhase.Downloading -> stringResource(R.string.update_downloading)
+                    is UpdatePhase.Ready -> stringResource(R.string.update_install)
+                    UpdatePhase.Failed -> stringResource(R.string.update_retry)
+                    UpdatePhase.Idle -> stringResource(R.string.update_action)
                 },
                 fontWeight = FontWeight.SemiBold,
             )
@@ -236,8 +276,8 @@ private data class HeroStyle(val gradient: List<Color>, val fg: Color, val title
 private fun StatusHero(status: PowerStatus, text: StatusText?, today: List<Interval>?, nowMinute: Int) {
     val pc = Power.colors
     val (gradient, fg, title, emoji) = when (status) {
-        is PowerStatus.On -> HeroStyle(pc.heroOn, pc.onHeroOn, "Світло є", "💡")
-        is PowerStatus.Off -> HeroStyle(pc.heroOff, pc.onHeroOff, "Світла немає", "🌙")
+        is PowerStatus.On -> HeroStyle(pc.heroOn, pc.onHeroOn, stringResource(R.string.status_on), "💡")
+        is PowerStatus.Off -> HeroStyle(pc.heroOff, pc.onHeroOff, stringResource(R.string.status_off), "🌙")
         else -> HeroStyle(pc.heroNeutral, pc.onHeroNeutral, text?.title.orEmpty(), "🔌")
     }
     val accent = if (status is PowerStatus.Off) pc.heroOffAccent else fg
@@ -254,19 +294,21 @@ private fun StatusHero(status: PowerStatus, text: StatusText?, today: List<Inter
                 drawCircle(fg.copy(alpha = 0.07f), radius = size.height * k, center = c)
             }
         }
-        Column(Modifier.padding(20.dp)) {
+        // Read as one item: "Зараз, Світла немає, Увімкнуть завтра о 03:00, Відключення: …".
+        Column(Modifier.padding(20.dp).semantics(mergeDescendants = true) {}) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(fg.copy(alpha = 0.12f)),
+                        .background(fg.copy(alpha = 0.12f))
+                        .clearAndSetSemantics {}, // decorative emoji
                     contentAlignment = Alignment.Center,
                 ) { Text(emoji, style = MaterialTheme.typography.titleLarge) }
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text(
-                        "ЗАРАЗ",
+                        stringResource(R.string.now_label).uppercase(appLocale()),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = fg.copy(alpha = 0.65f),
@@ -277,7 +319,7 @@ private fun StatusHero(status: PowerStatus, text: StatusText?, today: List<Inter
             text?.subtitle?.let {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    it.replaceFirstChar { c -> c.uppercase(UK) },
+                    it.replaceFirstChar { c -> c.uppercase(appLocale()) },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = accent,
@@ -295,6 +337,7 @@ private fun StatusHero(status: PowerStatus, text: StatusText?, today: List<Inter
                     onColor = fg.copy(alpha = 0.2f),
                     offColor = fg.copy(alpha = 0.85f),
                     markerColor = if (status is PowerStatus.Off) pc.heroOffAccent else pc.nowMarker,
+                    description = timelineDescription(today),
                 )
                 Spacer(Modifier.height(4.dp))
                 HourLabels(fg.copy(alpha = 0.65f))
@@ -306,13 +349,14 @@ private fun StatusHero(status: PowerStatus, text: StatusText?, today: List<Inter
 // ---- Queue picker ----
 
 @Composable
-internal fun QueuePicker(selected: Queue?, title: String = "Ваша черга", onSelect: (Queue) -> Unit) {
+internal fun QueuePicker(selected: Queue?, title: String = stringResource(R.string.your_queue), onSelect: (Queue) -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
             .clip(CardShape)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(16.dp),
+            .padding(16.dp)
+            .selectableGroup(),
     ) {
         SectionTitle(title)
         Spacer(Modifier.height(12.dp))
@@ -329,9 +373,10 @@ internal fun QueuePicker(selected: Queue?, title: String = "Ваша черга"
 private fun QueuePill(q: Queue, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(14.dp)
+    val spoken = stringResource(R.string.a11y_queue, q.toString())
     Box(
         modifier
-            .height(44.dp)
+            .height(48.dp)
             .clip(shape)
             .then(
                 if (selected) {
@@ -342,7 +387,9 @@ private fun QueuePill(q: Queue, selected: Boolean, onClick: () -> Unit, modifier
                         .border(1.dp, cs.outlineVariant, shape)
                 },
             )
-            .clickable(onClick = onClick),
+            // A radio choice: TalkBack says "Черга 3.1, вибрано" instead of a bare "3.1".
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = spoken },
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -355,12 +402,12 @@ private fun QueuePill(q: Queue, selected: Boolean, onClick: () -> Unit, modifier
 }
 
 @Composable
-private fun ChoicePill(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun ChoicePill(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier, spoken: String = label) {
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(14.dp)
     Box(
         modifier
-            .height(40.dp)
+            .height(48.dp)
             .clip(shape)
             .then(
                 if (selected) {
@@ -371,7 +418,8 @@ private fun ChoicePill(label: String, selected: Boolean, onClick: () -> Unit, mo
                         .border(1.dp, cs.outlineVariant, shape)
                 },
             )
-            .clickable(onClick = onClick),
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = spoken },
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -404,40 +452,45 @@ private fun NotificationsCard(
         if (!allowed) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "⚠ Сповіщення вимкнені для застосунку",
+                    stringResource(R.string.notifications_blocked),
                     style = MaterialTheme.typography.bodyMedium,
                     color = cs.error,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = onAllow) { Text("Дозволити", fontWeight = FontWeight.SemiBold) }
+                TextButton(onClick = onAllow) { Text(stringResource(R.string.notifications_allow), fontWeight = FontWeight.SemiBold) }
             }
         }
-        Text("Перед відключенням", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.notify_before_outage), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        val s = strings()
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.selectableGroup()) {
             for (minutes in AlertPrefs.LEAD_CHOICES) {
+                val label = if (minutes == 0) stringResource(R.string.notify_lead_off) else formatDuration(minutes, s)
                 ChoicePill(
-                    label = if (minutes == 0) "Вимк" else formatDuration(minutes),
+                    label = label,
                     selected = prefs.leadMinutes == minutes,
                     onClick = { onChange(prefs.copy(leadMinutes = minutes)) },
                     modifier = Modifier.weight(1f),
+                    spoken = stringResource(R.string.a11y_lead, label),
                 )
             }
         }
-        SwitchRow("Коли світло має повернутися", prefs.backOn) { onChange(prefs.copy(backOn = it)) }
-        SwitchRow("Опубліковано або змінено графік", prefs.scheduleChanges) { onChange(prefs.copy(scheduleChanges = it)) }
+        SwitchRow(stringResource(R.string.notify_back_on), prefs.backOn) { onChange(prefs.copy(backOn = it)) }
+        SwitchRow(stringResource(R.string.notify_schedule_changes), prefs.scheduleChanges) { onChange(prefs.copy(scheduleChanges = it)) }
     }
 }
 
+/** The whole row is one switch for TalkBack (label + state), not a text and a separate unlabeled switch. */
 @Composable
 private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onChange(!checked) },
+            .heightIn(min = 48.dp)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
@@ -465,10 +518,20 @@ private fun StatsCard(stats: HistoryStats) {
             val track = cs.surfaceVariant
             // A day without a published schedule: an empty, fainter slot, so the gap stays visible.
             val noSchedule = cs.surfaceVariant.copy(alpha = 0.35f)
+            val s = strings()
+            val chartSpoken = stringResource(
+                R.string.a11y_chart,
+                stats.daily.joinToString("; ") { day ->
+                    val date = DAY_SHORT.format(day.date)
+                    if (day.hasSchedule) s.get(R.string.a11y_chart_day, date, formatDuration(day.offMinutes, s))
+                    else s.get(R.string.a11y_chart_day_no_schedule, date)
+                },
+            )
             Canvas(
                 Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(56.dp)
+                    .semantics { contentDescription = chartSpoken },
             ) {
                 val n = stats.daily.size
                 val gap = 4.dp.toPx()
@@ -482,16 +545,16 @@ private fun StatsCard(stats: HistoryStats) {
                     }
                 }
             }
-            Row {
-                Text(SHORT_DAY.format(stats.daily.first().date), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Row(Modifier.clearAndSetSemantics {}) { // the chart's description already covers the axis
+                Text(DAY_SHORT.format(stats.daily.first().date), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
-                Text("годин без світла на день", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Text(stringResource(R.string.stats_chart_caption), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
-                Text(SHORT_DAY.format(stats.daily.last().date), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Text(DAY_SHORT.format(stats.daily.last().date), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
             }
             if (stats.daily.any { !it.hasSchedule }) {
                 Text(
-                    "Бліді стовпчики — дні, на які графік не публікували (рахуються як 0 год).",
+                    stringResource(R.string.stats_chart_note),
                     style = MaterialTheme.typography.labelSmall,
                     color = cs.onSurfaceVariant,
                 )
@@ -503,35 +566,41 @@ private fun StatsCard(stats: HistoryStats) {
 @Composable
 private fun StatTile(period: PeriodStats, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
+    val s = strings()
     Column(
         modifier
             .clip(RoundedCornerShape(16.dp))
             .background(cs.surfaceVariant.copy(alpha = 0.6f))
-            .padding(12.dp),
+            .padding(12.dp)
+            .semantics(mergeDescendants = true) {},
     ) {
         // The real number of days: shorter than 7/30 when the app's history does not reach that far back.
-        Text(formatDays(period.days).uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = cs.onSurfaceVariant)
         Text(
-            formatDuration(period.offMinutes),
+            formatDays(period.days, s).uppercase(appLocale()),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = cs.onSurfaceVariant,
+        )
+        Text(
+            formatDuration(period.offMinutes, s),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.ExtraBold,
         )
         Text(
-            if (period.days == 0) "немає даних" else "≈ ${formatDuration(period.avgMinutesPerDay)} на день",
+            if (period.days == 0) stringResource(R.string.stats_no_data)
+            else stringResource(R.string.stats_avg_per_day, formatDuration(period.avgMinutesPerDay, s)),
             style = MaterialTheme.typography.bodySmall,
             color = cs.onSurfaceVariant,
         )
         if (period.daysWithoutSchedule > 0) {
             Text(
-                "без графіка: ${formatDays(period.daysWithoutSchedule)}",
+                stringResource(R.string.stats_days_without_schedule, formatDays(period.daysWithoutSchedule, s)),
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSurfaceVariant,
             )
         }
     }
 }
-
-private val SHORT_DAY = DateTimeFormatter.ofPattern("dd.MM")
 
 // ---- Day cards ----
 
@@ -547,12 +616,13 @@ private fun DayCard(title: String, day: DaySchedule?, emptyText: String, nowMinu
             .background(cs.surface)
             .padding(18.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             if (day != null) {
                 Spacer(Modifier.width(8.dp))
+                val weekday = DateTimeFormatter.ofPattern("EEE", appLocale())
                 Text(
-                    "${DAY_SHORT.format(day.date)} · ${WEEKDAY.format(day.date)}",
+                    "${DAY_SHORT.format(day.date)} · ${weekday.format(day.date)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = cs.onSurfaceVariant,
                 )
@@ -565,12 +635,13 @@ private fun DayCard(title: String, day: DaySchedule?, emptyText: String, nowMinu
             Text(emptyText, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
             return@Column
         }
-        Timeline(day.intervals, nowMinute, 18.dp, pc.on, pc.off, pc.nowMarker)
+        // The interval pills below say the same; the bar is a visual summary only.
+        Timeline(day.intervals, nowMinute, 18.dp, pc.on, pc.off, pc.nowMarker, description = null)
         Spacer(Modifier.height(4.dp))
         HourLabels(cs.onSurfaceVariant)
         Spacer(Modifier.height(14.dp))
         if (day.intervals.isEmpty()) {
-            Text("Без відключень 🎉", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.no_outages_party), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         } else {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -588,12 +659,15 @@ private fun DayCard(title: String, day: DaySchedule?, emptyText: String, nowMinu
 private fun IntervalPill(i: Interval, active: Boolean) {
     val pc = Power.colors
     val shape = RoundedCornerShape(50)
+    val spoken = if (active) stringResource(R.string.a11y_now, i.format()) else i.format()
     Row(
         Modifier
             .clip(shape)
             .background(pc.off)
             .then(if (active) Modifier.border(2.dp, pc.nowMarker, shape) else Modifier)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp)
+            // The highlighted pill is the current outage: say so, the border alone is visual only.
+            .clearAndSetSemantics { contentDescription = spoken },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -610,21 +684,29 @@ private fun IntervalPill(i: Interval, active: Boolean) {
 @Composable
 private fun OffBadge(intervals: List<Interval>) {
     val cs = MaterialTheme.colorScheme
+    val s = strings()
+    val total = formatDuration(intervals.offMinutes(), s)
+    // "−9 год" reads as "minus 9 hours"; TalkBack gets "без світла 9 год" instead.
+    val spoken = if (intervals.isEmpty()) stringResource(R.string.no_outages) else stringResource(R.string.without_power, total)
     Text(
-        if (intervals.isEmpty()) "0 год" else "−${formatHours(intervals.offMinutes())}",
+        if (intervals.isEmpty()) s.get(R.string.duration_h, 0) else stringResource(R.string.off_badge, total),
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.Bold,
         color = cs.onSecondaryContainer,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(cs.secondaryContainer)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .clearAndSetSemantics { contentDescription = spoken },
     )
 }
 
 // ---- Timeline ----
 
-/** A 24h bar: [onColor] base, [offColor] outage segments, optional "now" marker. */
+/**
+ * A 24h bar: [onColor] base, [offColor] outage segments, optional "now" marker.
+ * [description] is what TalkBack reads; null hides the bar when the same information is shown as text nearby.
+ */
 @Composable
 private fun Timeline(
     intervals: List<Interval>,
@@ -633,11 +715,13 @@ private fun Timeline(
     onColor: Color,
     offColor: Color,
     markerColor: Color,
+    description: String?,
 ) {
     Canvas(
         Modifier
             .fillMaxWidth()
-            .height(height + 8.dp),
+            .height(height + 8.dp)
+            .clearAndSetSemantics { if (description != null) contentDescription = description },
     ) {
         val barTop = 4.dp.toPx()
         val barH = height.toPx()
@@ -671,7 +755,7 @@ private fun Timeline(
 
 @Composable
 private fun HourLabels(color: Color) {
-    Row(Modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth().clearAndSetSemantics {}) { // axis ticks: noise for TalkBack
         listOf("00", "06", "12", "18", "24").forEachIndexed { i, h ->
             val edge = i == 0 || i == 4
             Text(
@@ -710,7 +794,8 @@ private fun SyncRow(lastSyncAt: Instant?, refreshing: Boolean, issue: SyncIssue?
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                lastSyncAt?.let { "Оновлено ${SYNC.format(it.atZone(KyivTime.ZONE))}" } ?: "Ще не оновлювалось",
+                lastSyncAt?.let { stringResource(R.string.updated_at, SYNC.format(it.atZone(KyivTime.ZONE))) }
+                    ?: stringResource(R.string.never_updated),
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
@@ -725,15 +810,18 @@ private fun SyncRow(lastSyncAt: Instant?, refreshing: Boolean, issue: SyncIssue?
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = cs.onSecondary)
                     Spacer(Modifier.width(8.dp))
                 }
-                Text("↻  Оновити", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.refresh), fontWeight = FontWeight.SemiBold)
             }
         }
         if (issue != null && !refreshing) {
             Text(
-                (if (issue.isError) "⚠ " else "ℹ ") + issue.message(),
+                (if (issue.isError) "⚠ " else "ℹ ") + issue.message(strings()),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (issue.isError) cs.error else cs.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
+                // Announced when it appears, e.g. right after tapping Refresh while offline.
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
     }
@@ -752,21 +840,24 @@ private fun HistoryCard(history: List<DaySchedule>) {
             .background(cs.surface)
             .padding(horizontal = 18.dp, vertical = 4.dp),
     ) {
+        val s = strings()
+        val dayFormat = DateTimeFormatter.ofPattern("dd.MM, EEE", appLocale())
         history.forEachIndexed { idx, day ->
             if (idx > 0) HorizontalDivider(color = cs.outlineVariant)
-            Column(Modifier.padding(vertical = 12.dp)) {
+            // One TalkBack item per day: "11.11, ср, без світла 5 год, 05:30–07:00 16:00–19:30".
+            Column(Modifier.padding(vertical = 12.dp).semantics(mergeDescendants = true) {}) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(DAY.format(day.date), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(dayFormat.format(day.date), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.weight(1f))
                     Text(
-                        if (day.intervals.isEmpty()) "без відключень"
-                        else "без світла ${formatHours(day.intervals.offMinutes())}",
+                        if (day.intervals.isEmpty()) stringResource(R.string.no_outages)
+                        else stringResource(R.string.without_power, formatDuration(day.intervals.offMinutes(), s)),
                         style = MaterialTheme.typography.labelMedium,
                         color = cs.onSurfaceVariant,
                     )
                 }
                 Spacer(Modifier.height(6.dp))
-                Timeline(day.intervals, null, 8.dp, pc.on.copy(alpha = 0.6f), pc.off, pc.nowMarker)
+                Timeline(day.intervals, null, 8.dp, pc.on.copy(alpha = 0.6f), pc.off, pc.nowMarker, description = null)
                 if (day.intervals.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -781,9 +872,3 @@ private fun HistoryCard(history: List<DaySchedule>) {
 }
 
 private fun List<Interval>.offMinutes(): Int = sumOf { it.endMinute - it.startMinute }
-
-private fun formatHours(minutes: Int): String {
-    val h = minutes / 60
-    val m = minutes % 60
-    return if (m == 0) "$h год" else "$h год $m хв"
-}

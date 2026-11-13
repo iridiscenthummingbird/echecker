@@ -1,6 +1,130 @@
-<resources>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ukrainian is the default language; English lives in values-en. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="uk">
     <string name="app_name">Чи є світло</string>
     <string name="widget_description">Статус світла для вашої черги</string>
     <string name="queue_widget_label">Світло: інша черга</string>
     <string name="queue_widget_description">Статус світла для черги, яку ви оберете (батьки, робота)</string>
+
+    <!-- Durations and counts -->
+    <string name="duration_h">%1$d год</string>
+    <string name="duration_m">%1$d хв</string>
+    <string name="duration_h_m">%1$d год %2$d хв</string>
+    <plurals name="days">
+        <item quantity="one">%d день</item>
+        <item quantity="few">%d дні</item>
+        <item quantity="many">%d днів</item>
+        <item quantity="other">%d дня</item>
+    </plurals>
+
+    <!-- Status (app hero, widget, formatter) -->
+    <string name="status_on">Світло є</string>
+    <string name="status_off">Світла немає</string>
+    <string name="status_on_title">💡 Світло є</string>
+    <string name="status_off_title">🌑 Світла нема</string>
+    <string name="status_no_schedule">Відключень не заплановано</string>
+    <string name="status_no_data">Немає даних</string>
+    <string name="status_no_data_hint">відкрийте застосунок</string>
+    <string name="status_pick_queue">Оберіть чергу</string>
+    <string name="status_turns_off">вимкнуть %s</string>
+    <string name="status_turns_on">увімкнуть %s</string>
+    <string name="status_no_more_outages">відключень більше нема</string>
+    <string name="at_time">о %s</string>
+    <string name="at_midnight">о 24:00</string>
+    <string name="at_tomorrow_time">завтра о %s</string>
+    <string name="at_tomorrow_midnight">завтра о 24:00</string>
+    <string name="stale_today">оновлено о %s</string>
+    <string name="stale_date">оновлено %s</string>
+    <string name="now_label">Зараз</string>
+    <string name="queue_label">Черга %s</string>
+    <string name="countdown_format">через %s</string>
+
+    <!-- Main screen -->
+    <string name="title_schedule">Графік світла</string>
+    <string name="queue_not_selected">Черга не обрана</string>
+    <string name="pick_queue_prompt">Оберіть чергу, щоб бачити графік</string>
+    <string name="your_queue">Ваша черга</string>
+    <string name="today">Сьогодні</string>
+    <string name="tomorrow">Завтра</string>
+    <string name="not_published_yet">Графік ще не опубліковано</string>
+    <string name="no_outages_party">Без відключень 🎉</string>
+    <string name="no_outages">без відключень</string>
+    <string name="without_power">без світла %s</string>
+    <string name="off_badge">−%s</string>
+    <string name="section_notifications">Сповіщення</string>
+    <string name="section_history">Історія</string>
+    <string name="history_empty">Історія поки порожня</string>
+    <string name="updated_at">Оновлено %s</string>
+    <string name="never_updated">Ще не оновлювалось</string>
+    <string name="refresh">↻  Оновити</string>
+
+    <!-- Update banner -->
+    <string name="update_available">Доступна версія %s</string>
+    <string name="update_failed">Не вдалося завантажити</string>
+    <string name="update_ready">Завантажено, можна встановити</string>
+    <string name="update_current">Зараз у вас %s</string>
+    <string name="update_downloading">Завантаження…</string>
+    <string name="update_install">Встановити</string>
+    <string name="update_retry">Ще раз</string>
+    <string name="update_action">Оновити</string>
+    <string name="update_notification_text">Відкрийте застосунок, щоб оновитися</string>
+
+    <!-- Notification settings -->
+    <string name="notifications_blocked">⚠ Сповіщення вимкнені для застосунку</string>
+    <string name="notifications_allow">Дозволити</string>
+    <string name="notify_before_outage">Перед відключенням</string>
+    <string name="notify_lead_off">Вимк</string>
+    <string name="notify_back_on">Коли світло має повернутися</string>
+    <string name="notify_schedule_changes">Опубліковано або змінено графік</string>
+
+    <!-- History stats -->
+    <string name="stats_no_data">немає даних</string>
+    <string name="stats_avg_per_day">≈ %s на день</string>
+    <string name="stats_days_without_schedule">без графіка: %s</string>
+    <string name="stats_chart_caption">годин без світла на день</string>
+    <string name="stats_chart_note">Бліді стовпчики — дні, на які графік не публікували (рахуються як 0 год).</string>
+
+    <!-- Notifications -->
+    <string name="channel_outages">Відключення світла</string>
+    <string name="channel_outages_description">Перед відключенням і коли світло має повернутися</string>
+    <string name="channel_schedule">Зміни графіка</string>
+    <string name="channel_schedule_description">Опубліковано або змінено графік на сьогодні чи завтра</string>
+    <string name="channel_updates">Оновлення застосунку</string>
+    <string name="alert_soon_title">Через %s вимкнуть світло</string>
+    <string name="alert_soon_body">Черга %1$s · без світла %2$s</string>
+    <string name="alert_back_title">Світло має повернутися</string>
+    <string name="alert_back_body">Черга %1$s · відключення %2$s закінчилось за графіком</string>
+    <string name="change_published_today">Графік на сьогодні, %s</string>
+    <string name="change_published_tomorrow">Графік на завтра, %s</string>
+    <string name="change_changed_today">Графік на сьогодні змінився</string>
+    <string name="change_changed_tomorrow">Графік на завтра змінився</string>
+    <string name="change_body_none">Черга %s: без відключень</string>
+    <string name="change_body">Черга %1$s: %2$s (без світла %3$s)</string>
+
+    <!-- Sync issues -->
+    <string name="reason_offline">немає інтернету</string>
+    <string name="reason_network">не вдалося з\'єднатися</string>
+    <string name="reason_server">джерело не відповідає</string>
+    <string name="reason_server_code">джерело не відповідає (HTTP %d)</string>
+    <string name="reason_format">не вдалося прочитати канал — схоже, змінився його формат</string>
+    <string name="reason_unknown">невідома помилка</string>
+    <string name="issue_backup">Основне джерело недоступне (%1$s). Дані з резервного: %2$s</string>
+    <string name="issue_offline">Немає інтернету — оновимо, щойно з\'явиться</string>
+    <string name="issue_failed">Не вдалося оновити: %s</string>
+    <string name="source_oblenergo">Telegram «Запоріжжяобленерго»</string>
+
+    <!-- Queue widget setup -->
+    <string name="widget_setup_title">Черга для віджета</string>
+    <string name="widget_setup_text">Цей віджет показуватиме обрану чергу незалежно від черги в застосунку — наприклад, для батьків чи роботи.</string>
+    <string name="widget_setup_pick">Оберіть чергу</string>
+
+    <!-- Accessibility -->
+    <string name="a11y_timeline">Відключення: %s</string>
+    <string name="a11y_timeline_none">Відключень немає</string>
+    <string name="a11y_now">Зараз %s</string>
+    <string name="a11y_queue">Черга %s</string>
+    <string name="a11y_chart">Години без світла за останні дні: %s</string>
+    <string name="a11y_chart_day">%1$s — %2$s</string>
+    <string name="a11y_chart_day_no_schedule">%s — графік не публікували</string>
+    <string name="a11y_lead">Попередження перед відключенням: %s</string>
 </resources>

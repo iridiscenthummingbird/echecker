@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import ua.echecker.container
 import ua.echecker.data.SyncIssue
 import ua.echecker.domain.AlertTexts
+import ua.echecker.i18n.strings
 import ua.echecker.domain.KyivTime
 import ua.echecker.domain.Queue
 import ua.echecker.domain.Schedule
@@ -89,7 +90,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         bestEffort("Schedule change notification") {
             for (change in ScheduleChanges.detect(today, queue, before, snapshot(today))) {
                 val id = if (change.isToday) Notifications.ID_SCHEDULE_TODAY else Notifications.ID_SCHEDULE_TOMORROW
-                Notifications.show(applicationContext, Notifications.CHANNEL_SCHEDULE, id, AlertTexts.forChange(change, queue))
+                Notifications.show(applicationContext, Notifications.CHANNEL_SCHEDULE, id, AlertTexts.forChange(change, queue, applicationContext.strings))
             }
         }
     }
